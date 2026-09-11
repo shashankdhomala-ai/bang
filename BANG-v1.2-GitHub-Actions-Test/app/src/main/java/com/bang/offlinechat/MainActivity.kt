@@ -182,10 +182,13 @@ class MainActivity : Activity() {
         }
     }
 
-    @Deprecated("Deprecated in Android 13; kept for compatibility with minSdk 26.")
-    override fun onBackPressed() {
-        if (web.canGoBack()) web.goBack() else super.onBackPressed()
+override fun onBackPressed() {
+    if (web.canGoBack()) {
+        web.goBack()
+    } else {
+        super.onBackPressed()
     }
+}
 
     override fun onDestroy() {
         audio.stop()
