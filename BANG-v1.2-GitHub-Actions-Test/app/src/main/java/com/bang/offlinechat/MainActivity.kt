@@ -1,3 +1,4 @@
+```kotlin
 package com.bang.offlinechat
 
 import android.Manifest
@@ -73,18 +74,27 @@ class MainActivity : Activity() {
                 }
 
                 override fun onPeerConnected(peer: MeshManager.Peer) {
-                    sendMeshEvent("peer_connected", peer.name)
+                    sendMeshEvent(
+                        "peer_connected",
+                        peer.name
+                    )
                 }
 
                 override fun onMessage(
                     text: String,
                     peer: MeshManager.Peer
                 ) {
-                    sendMeshMessage(text, peer.name)
+                    sendMeshMessage(
+                        text,
+                        peer.name
+                    )
                 }
 
                 override fun onError(text: String) {
-                    sendMeshEvent("error", text)
+                    sendMeshEvent(
+                        "error",
+                        text
+                    )
                 }
 
                 override fun onCallEvent(
@@ -92,7 +102,11 @@ class MainActivity : Activity() {
                     from: String,
                     target: String
                 ) {
-                    sendCallEvent(event, from, target)
+                    sendCallEvent(
+                        event,
+                        from,
+                        target
+                    )
                 }
             }
         )
@@ -118,6 +132,7 @@ class MainActivity : Activity() {
                 val api = BuildConfig.BANG_API_URL
 
                 if (api.isNotBlank()) {
+
                     val escaped = api
                         .replace("\\", "\\\\")
                         .replace("'", "\\'")
@@ -201,16 +216,20 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun startAudioServer() {
             runOnUiThread {
+
                 requestAudioPermissions {
+
                     startCallService()
 
-                    audio.startServer {
-                        sendCallEvent(
-                            "audio_connected",
-                            "",
-                            ""
-                        )
-                    }
+                    audio.startServer(
+                        {
+                            sendCallEvent(
+                                "audio_connected",
+                                "",
+                                ""
+                            )
+                        }
+                    )
                 }
             }
         }
@@ -218,12 +237,14 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun connectAudio(host: String) {
             runOnUiThread {
+
                 requestAudioPermissions {
+
                     startCallService()
 
                     audio.connect(
-                        host,
-                        {
+                        host = host,
+                        onConnected = {
                             sendCallEvent(
                                 "audio_connected",
                                 "",
@@ -246,7 +267,9 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun startRelay() {
             runOnUiThread {
+
                 relay.start { text ->
+
                     sendMeshEvent(
                         "relay_status",
                         text
@@ -258,6 +281,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun stopRelay() {
             runOnUiThread {
+
                 relay.stop()
 
                 sendMeshEvent(
@@ -270,6 +294,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun connect(address: String) {
             runOnUiThread {
+
                 mesh.peerList()
                     .firstOrNull {
                         it.address == address
@@ -284,6 +309,7 @@ class MainActivity : Activity() {
     private fun requestAudioPermissions(
         afterGranted: () -> Unit
     ) {
+
         val missing = mutableListOf<String>()
 
         if (
@@ -304,6 +330,7 @@ class MainActivity : Activity() {
         }
 
         if (missing.isNotEmpty()) {
+
             pendingAudioAction = afterGranted
 
             requestPermissions(
@@ -324,6 +351,7 @@ class MainActivity : Activity() {
     }
 
     private fun startCallService() {
+
         val intent = Intent(
             this,
             BangCallService::class.java
@@ -337,6 +365,7 @@ class MainActivity : Activity() {
     }
 
     private fun stopCallService() {
+
         stopService(
             Intent(
                 this,
@@ -371,6 +400,7 @@ class MainActivity : Activity() {
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+
             missing += Manifest.permission.ACCESS_FINE_LOCATION
         }
 
@@ -395,11 +425,13 @@ class MainActivity : Activity() {
             adapter != null &&
             !adapter.isEnabled
         ) {
+
             startActivity(
                 Intent(
                     BluetoothAdapter.ACTION_REQUEST_ENABLE
                 )
             )
+
             return
         }
 
@@ -411,6 +443,7 @@ class MainActivity : Activity() {
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
+
         super.onRequestPermissionsResult(
             requestCode,
             permissions,
@@ -468,6 +501,7 @@ class MainActivity : Activity() {
         type: String,
         text: String
     ) {
+
         runOnUiThread {
 
             val js =
@@ -478,6 +512,7 @@ class MainActivity : Activity() {
                 ");"
 
             if (::web.isInitialized) {
+
                 web.evaluateJavascript(
                     js,
                     null
@@ -489,6 +524,7 @@ class MainActivity : Activity() {
     private fun sendMeshPeer(
         peer: MeshManager.Peer
     ) {
+
         runOnUiThread {
 
             val js =
@@ -499,6 +535,7 @@ class MainActivity : Activity() {
                 ");"
 
             if (::web.isInitialized) {
+
                 web.evaluateJavascript(
                     js,
                     null
@@ -512,6 +549,7 @@ class MainActivity : Activity() {
         from: String,
         target: String
     ) {
+
         runOnUiThread {
 
             val js =
@@ -523,6 +561,7 @@ class MainActivity : Activity() {
                 ");"
 
             if (::web.isInitialized) {
+
                 web.evaluateJavascript(
                     js,
                     null
@@ -535,6 +574,7 @@ class MainActivity : Activity() {
         text: String,
         peerName: String
     ) {
+
         runOnUiThread {
 
             val js =
@@ -545,6 +585,7 @@ class MainActivity : Activity() {
                 ");"
 
             if (::web.isInitialized) {
+
                 web.evaluateJavascript(
                     js,
                     null
@@ -554,6 +595,7 @@ class MainActivity : Activity() {
     }
 
     override fun onBackPressed() {
+
         if (web.canGoBack()) {
             web.goBack()
         } else {
@@ -562,14 +604,19 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+
         audio.stop()
         stopCallService()
         relay.stop()
         wifiCalls.stop()
         mesh.stop()
-        web.stopLoading()
-        web.destroy()
+
+        if (::web.isInitialized) {
+            web.stopLoading()
+            web.destroy()
+        }
 
         super.onDestroy()
     }
 }
+```
