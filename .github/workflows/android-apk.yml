@@ -24,20 +24,20 @@ jobs:
         with:
           gradle-version: '8.9'
 
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v3
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-    - name: Install Android SDK 36 platform
-      run: |
-        yes | sdkmanager --licenses >/dev/null || true
-        sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+      - name: Install Android SDK 36 platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
 
-    - name: Build debug APK
-      run: gradle --no-daemon assembleDebug
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
 
-    - name: Upload debug APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: BANG-debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: error
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BANG-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
