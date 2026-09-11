@@ -618,4 +618,3 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 }
-```
