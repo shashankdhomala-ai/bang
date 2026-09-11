@@ -11,7 +11,7 @@ android {
         targetSdk = 36
         versionCode = 14
         versionName = "1.0.1"
-        buildConfigField("String", "BANG_API_URL", "\"\"")
+buildConfigField("String", "BANG_API_URL", "\"http://192.168.1.11:8080\"")
     }
 
     compileOptions {
