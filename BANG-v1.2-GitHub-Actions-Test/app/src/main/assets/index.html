@@ -1,51 +1,1243 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090b18"><title>BANG — Friends, Nearby.</title><style>
-*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:radial-gradient(circle at top,#202653 0,#090b18 48%,#05060d 100%);color:#f7f8ff;min-height:100vh}.shell{width:min(1100px,96vw);margin:auto;padding:22px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.brand{font-size:34px;font-weight:950;letter-spacing:-1px}.pill{padding:8px 12px;border:1px solid #ffffff20;border-radius:999px;background:#ffffff0b;color:#b8c0dd;font-size:13px}.layout{display:grid;grid-template-columns:280px 1fr;gap:16px}.panel,.chatbox,.auth{background:#ffffff09;border:1px solid #ffffff15;backdrop-filter:blur(20px);border-radius:26px;box-shadow:0 25px 70px #0007}.panel{padding:18px}.profile{padding:14px;border-radius:18px;background:linear-gradient(135deg,#6d5dfc33,#24d5ff18);border:1px solid #ffffff14}.avatar{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,#7c6cff,#36d1dc);font-size:24px;font-weight:900}.profile-row{display:flex;gap:12px;align-items:center}.muted{color:#9ba5c4;font-size:13px}.nav{margin-top:18px;display:grid;gap:8px}.nav button{width:100%;text-align:left;background:transparent;color:#cfd5eb;border:0;padding:12px;border-radius:13px;font-weight:700}.nav button.active,.nav button:hover{background:#ffffff12;color:#fff}.chatbox{overflow:hidden;min-height:72vh;display:flex;flex-direction:column}.chat-head{padding:18px 20px;border-bottom:1px solid #ffffff12;display:flex;justify-content:space-between;align-items:center}.title{font-size:20px;font-weight:850}.messages{flex:1;padding:20px;overflow:auto;min-height:380px}.msg{max-width:72%;padding:11px 14px;margin:9px 0;border-radius:17px;background:#ffffff0d;border:1px solid #ffffff0c}.me{margin-left:auto;background:linear-gradient(135deg,#6658e8,#3b82f6);border:0}.meta{font-size:11px;color:#aeb7d1;margin-bottom:4px}.composer{padding:14px;border-top:1px solid #ffffff12;display:flex;gap:9px}.composer input,.field{width:100%;background:#050811;color:#fff;border:1px solid #ffffff18;border-radius:14px;padding:13px;outline:none}.btn{border:0;border-radius:14px;padding:12px 16px;font-weight:850;cursor:pointer;background:#fff;color:#111}.join{display:flex;gap:10px;margin-top:16px}.notice{margin:14px 20px 0;padding:11px 13px;border-radius:13px;background:#f59e0b15;color:#ffd78b;font-size:12px}.hidden{display:none}.auth{padding:28px;max-width:520px;margin:8vh auto}.auth h1{margin:0 0 8px}.form{display:grid;gap:10px;margin-top:18px}.actions{display:flex;gap:8px;flex-wrap:wrap}.secondary{background:#ffffff12;color:#fff;border:1px solid #ffffff18}.card{padding:16px;border:1px solid #ffffff12;border-radius:18px;background:#ffffff07;margin-top:12px}.list{display:grid;gap:8px;margin-top:10px}.friend{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:12px;background:#ffffff08}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:12px 16px;border-radius:14px;background:#161a2c;border:1px solid #ffffff18;display:none}.small{font-size:12px}.danger{color:#ffb4b4}.code{font-size:22px;letter-spacing:2px;font-weight:900;word-break:break-all}.toggle{cursor:pointer;color:#9fdcff}@media(max-width:760px){.layout{grid-template-columns:1fr}.panel{display:none}.shell{padding:12px}.chatbox{min-height:86vh}.brand{font-size:28px}.messages{min-height:450px}.msg{max-width:85%}}
-</style></head><body><div class="shell" id="app"></div><div class="toast" id="toast"></div><script>
-const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));let token=localStorage.getItem('bang_token')||'',me=null,ws=null;let API=localStorage.getItem('bang_api')||'';try{me=JSON.parse(localStorage.getItem('bang_user')||'null')}catch{localStorage.removeItem('bang_user')}
-if(API)API=API.replace(/\/$/,'');
-function toast(t){const x=$('toast');x.textContent=t;x.style.display='block';setTimeout(()=>x.style.display='none',2200)}
-function api(path,opts={}){opts.headers={...(opts.headers||{}),'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})};return fetch((API||'')+path,opts).then(async r=>{let d={};try{d=await r.json()}catch{}if(!r.ok)throw Error(d.error||'Request failed');return d})}
-function auth(){if(me&&token)showServerGate();else showAuth()}
-function showAuth(){app.innerHTML=`<section class="auth"><div class="brand">💥 BANG</div><p class="muted">Friends, nearby. Private conversations with BANG accounts.</p><div class="form"><input class="field" id="u" placeholder="Username (3–20 letters, numbers or _)"><input class="field" id="n" placeholder="Display name (for new account)"><input class="field" id="p" type="password" placeholder="Password (6+ characters)"><div class="actions"><button class="btn" onclick="signup()">Create account</button><button class="btn secondary" onclick="login()">Log in</button></div><div class="card"><span class="toggle" onclick="toggleConnection()">⚙️ Connection settings</span><div id="connectionSettings" class="hidden" style="margin-top:10px"><p class="muted small">For testing only. Normal Android users do not enter a server address; the app uses its configured BANG service.</p><input class="field" id="api" placeholder="http://192.168.1.10:8080" value="${esc(API)}"></div></div><div id="err" class="small danger"></div></div></section>`}
-function toggleConnection(){connectionSettings.classList.toggle('hidden')}
-function setApi(){const el=$('api');if(!el)return;API=el.value.trim().replace(/\/$/,'');if(API&&!/^https?:\/\//i.test(API))API='http://'+API;localStorage.setItem('bang_api',API)}
-async function signup(){setApi();if(!API)return $('err').textContent='BANG service is not configured in this Android build.';try{const d=await api('/api/signup',{method:'POST',body:JSON.stringify({username:$('u').value,displayName:$('n').value,password:$('p').value})});token=d.token;me=d.user;save();showAccountCode(true)}catch(e){$('err').textContent=e.message}}
-async function login(){setApi();if(!API)return $('err').textContent='BANG service is not configured in this Android build.';try{const d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('u').value,password:$('p').value})});token=d.token;me=d.user;save();showServerGate()}catch(e){$('err').textContent=e.message}}
-function showAccountCode(created){app.innerHTML=`<section class="auth"><div class="brand">💥 BANG</div><h1>${created?'Account created 🎉':'Your BANG account'}</h1><p class="muted">Keep this permanent account code private. Friends can use it to identify your BANG account.</p><div class="card"><div class="muted small">YOUR ACCOUNT CODE</div><div class="code">${esc(me.accountCode||'Generating…')}</div></div><div class="actions" style="margin-top:14px"><button class="btn" onclick="navigator.clipboard?.writeText(me.accountCode);toast('Account code copied')">Copy code</button><button class="btn secondary" onclick="showServerGate()">Continue</button></div></section>`}
-async function showServerGate(){try{const d=await api('/api/server');window.serverCode=d.serverCode;app.innerHTML=`<section class="auth"><div class="brand">💥 BANG</div><h1>Connect to BANG</h1><p class="muted">You're logged in as <b>@${esc(me.username)}</b>. Enter the server code to continue.</p><div class="card"><div class="muted small">BANG SERVER CODE</div><div class="code">${esc(serverCode)}</div><p class="muted small">For local testing, this code belongs to the BANG server you're connected to.</p></div><div class="form"><input class="field" id="serverCodeInput" placeholder="Enter server code"><button class="btn" onclick="joinServer()">Continue to BANG</button><div id="err" class="small danger"></div></div></section>`}catch(e){showHome();toast('Server connection is unavailable')}}
-async function joinServer(){try{await api('/api/server/join',{method:'POST',body:JSON.stringify({code:$('serverCodeInput').value})});localStorage.setItem('bang_server_code',$('serverCodeInput').value.trim().toUpperCase());showHome()}catch(e){$('err').textContent=e.message}}
-function save(){localStorage.setItem('bang_token',token);localStorage.setItem('bang_user',JSON.stringify(me))}
-function showHome(){app.innerHTML=`<header class="top"><div><div class="brand">💥 BANG</div><div class="muted">Private chats. Nearby rooms. No public feed.</div></div><div class="pill" id="connection">⚪ Ready</div></header><section class="layout"><aside class="panel"><div class="profile"><div class="profile-row"><div class="avatar">${esc((me.displayName||me.username)[0].toUpperCase())}</div><div><b>${esc(me.displayName)}</b><div class="muted">@${esc(me.username)}</div><div class="muted small">${esc(me.accountCode||'')}</div></div></div></div><div class="nav"><button class="active" onclick="chatView()">💬 Chats</button><button onclick="callsView()">📞 Calls</button><button onclick="friendsView()">👥 Friends</button><button onclick="invite()">🔗 Create invite</button><button onclick="settingsView()">⚙️ Settings</button><button onclick="logout()">↪ Log out</button></div></aside><main class="chatbox" id="main"></main></section>`;chatView()}
-function callsView(){ $('main').innerHTML=`<div class="chat-head"><div><div class="title">Voice calls</div><div class="muted">BANG voice calling foundation</div></div><span class="pill">🎙️ Beta</span></div><div style="padding:20px"><div class="card"><b>📞 Calling</b><p class="muted">BANG now has a local Wi-Fi voice transport. BLE remains the discovery/control layer, while Wi-Fi Direct carries the live audio.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="startWifiVoice()">🎙️ Start voice transport</button><button class="btn" onclick="startRelay()">🔗 Start A→B→C relay</button><button class="btn secondary" onclick="stopWifiVoice()">⏹ Stop voice</button><button class="btn secondary" onclick="stopRelay()">⏹ Stop relay</button></div><p class="muted small">For the first real-audio test, start the voice transport on the relay phone, then connect the caller/callee to its Wi-Fi Direct group.</p><p class="muted small"></p></div><div class="card"><b>Available nearby phones</b><div class="muted small" id="callPeerStatus">Start Mesh to discover nearby BANG phones.</div><div id="callPeerList" class="list"></div></div></div>`;syncCallPeers()}
-function syncCallPeers(){const src=$('meshPeerList'),dst=$('callPeerList');if(!dst)return;dst.innerHTML='';if(src){src.querySelectorAll('.friend').forEach(x=>{const clone=x.cloneNode(true),b=clone.querySelector('button');if(b)b.outerHTML='<button class="btn secondary" disabled>Voice call — next layer</button>';dst.appendChild(clone)})}}
-function chatView(){ $('main').innerHTML=`<div class="chat-head"><div><div class="title">Nearby room</div><div class="muted" id="roomStatus">Connect to a BANG server or start Mesh mode.</div></div><span class="pill">🔒 Private</span></div><div class="notice">🛰️ Mesh v1 uses BLE for nearby discovery and an encrypted GATT link for small text messages. Internet is not required for mesh chat.</div><div id="meshPeers" class="card" style="margin:14px 20px 0"><b>📡 Nearby BANG phones</b><div class="muted small" id="meshPeerStatus">Mesh is off.</div><div id="meshPeerList" class="list"></div></div><div id="messages" class="messages"></div><div class="composer"><input id="text" placeholder="Type a message…" onkeydown="if(event.key==='Enter')send()"><button class="btn" id="send" onclick="send()">Send</button></div><div class="join" style="padding:0 14px 14px"><button class="btn" onclick="connect()">Internet/Server</button><button class="btn" onclick="startMesh()">📡 Start Mesh</button><button class="btn secondary" onclick="stopMesh()">Stop Mesh</button><button class="btn secondary" onclick="clearChat()">Clear</button></div>`}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#090b18">
+<title>BANG — Friends, Nearby.</title>
+<style>
+* {
+box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Inter, system-ui, sans-serif;
+  color: #f7f8ff;
+  background:
+    radial-gradient(circle at top, #202653 0, #090b18 48%, #05060d 100%);
+}
 
-function startMesh(){if(!window.BangMesh)return toast('Mesh is available in the Android app build');window.BangMesh.start();}
-function stopMesh(){window.BangMesh?.stop();syncCallPeers();}
-function sendMesh(){const i=$('text'),t=i.value.trim();if(!t)return;window.BangMesh?.send(t);add(t,true,'Mesh');i.value=''}
-window.bangMeshEvent=function(type,text){if(type==='status'){if($('meshPeerStatus'))$('meshPeerStatus').textContent=text;if($('roomStatus'))$('roomStatus').textContent=text}if(type==='error')toast(text);if(type==='peer_connected')toast('🔐 Encrypted mesh link ready')};
-window.bangMeshPeer=function(name,address){const list=$('meshPeerList');if(!list)return;const id='peer_'+address.replace(/[^a-zA-Z0-9]/g,'_');if($(id))return;const d=document.createElement('div');d.className='friend';d.id=id;d.innerHTML=`<span>📱 ${esc(name)}<div class="muted small">Nearby BLE device</div></span><button class="btn" onclick="window.BangMesh.connect(${JSON.stringify(address)})">Connect</button>`;list.appendChild(d);syncCallPeers()};
-window.bangMeshMessage=function(text,name){add(text,false,name+' • Mesh')};
-function connect(){if(!API)return toast('Set your server in Settings');const proto=API.startsWith('https')?'wss':'ws';const host=API.replace(/^https?:\/\//,'');ws=new WebSocket(proto+'://'+host);ws.onopen=()=>{connection.textContent='🟢 Connected';roomStatus.textContent='Connected to your BANG room';text.disabled=false;send.disabled=false;ws.send(JSON.stringify({type:'join',name:me.displayName,username:me.username}))};ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='chat')add(m.text,false,m.name);if(m.type==='presence')roomStatus.textContent=m.text};ws.onclose=()=>{connection.textContent='⚪ Disconnected';if($('text'))text.disabled=true;if($('send'))send.disabled=true}}
-function add(t,own,label){const d=document.createElement('div');d.className='msg '+(own?'me':'');d.innerHTML='<div class="meta"></div><div></div>';d.children[0].textContent=own?'You':label;d.children[1].textContent=t;$('messages').appendChild(d);$('messages').scrollTop=$('messages').scrollHeight}
-function send(){const i=$('text'),t=i.value.trim();if(!t)return;if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'chat',name:me.displayName,username:me.username,text:t}));add(t,true);i.value='';return}if(window.BangMesh){window.BangMesh.send(t);add(t,true,'Mesh');i.value='';return}toast('Connect to BANG or start Mesh mode')}
-function clearChat(){if($('messages'))$('messages').innerHTML=''}function callNearby(){const peers=(window.bangPeers||[]);if(!peers.length)return toast('Start Mesh and discover a phone first');const target=prompt('Call which BANG device?',peers[0]?.name||'');if(target&&window.BangMesh){window.BangMesh.call(target)}}
-window.bangCallEvent=(event,from,target)=>{if(event==='incoming'){const accept=confirm('Incoming BANG call from '+from+'. Accept?');toast(accept?'Call accepted — start voice transport.':'Call declined');}else if(event==='outgoing'){toast('Calling '+target+' through the BANG mesh…')}else if(event==='audio_connected'){toast('🎙️ Live audio transport connected')}else if(event==='ended'){toast('BANG call ended')}}
-function startWifiVoice(){window.BangMesh?.startWifiCalls();toast('Starting Wi-Fi Direct voice transport…')}
-function startRelay(){window.BangMesh?.startWifiCalls();window.BangMesh?.startRelay();toast('Starting A→B→C encrypted audio relay…')}
-function stopRelay(){window.BangMesh?.stopRelay();}
-function stopWifiVoice(){window.BangMesh?.stopAudio();toast('Voice transport stopped')}
-window.bangMeshEvent=window.bangMeshEvent||function(type,text){if(type==='wifi_host')toast('Voice relay ready at '+text);else if(type==='wifi_status')toast(text);else if(type==='relay_status')toast(text);};
-window.bangMeshPeer=(name,address)=>{window.bangPeers=window.bangPeers||[];if(!window.bangPeers.some(x=>x.address===address))window.bangPeers.push({name,address});};
+button,
+input {
+  font: inherit;
+}
 
-async function friendsView(){main.innerHTML=`<div class="chat-head"><div><div class="title">Friends</div><div class="muted">Keep your circle intentional.</div></div></div><div style="padding:20px"><div class="card"><b>📡 Nearby BANG accounts</b><p class="muted small">Only accounts currently connected to this BANG local server appear here. Exact location is never shown.</p><button class="btn" onclick="nearby()">Find nearby accounts</button><div id="nearbyList" class="list"></div></div><div class="actions" style="margin-top:14px"><input class="field" id="friendName" placeholder="Username"><button class="btn" onclick="requestFriend()">Send request</button></div><div id="friends" class="list"></div><div id="incoming" class="list"></div></div>`;loadFriends()}
-async function nearby(){try{const d=await api('/api/nearby');$('nearbyList').innerHTML=(d.users||[]).map(x=>`<div class="friend"><span>@${esc(x.username)}<div class="muted small">${esc(x.displayName||'')}</div></span><button class="btn" onclick="requestByName('${esc(x.username)}')">Add</button></div>`).join('')||'<div class="muted">No nearby BANG accounts right now.</div>'}catch(e){toast(e.message)}}
-function requestByName(n){$('friendName').value=n;requestFriend()}
-async function loadFriends(){try{const d=await api('/api/friends');friends.innerHTML=(d.friends||[]).map(x=>`<div class="friend"><span>@${esc(x.username)}</span><span class="muted">${esc(x.displayName||'')}</span></div>`).join('')||'<div class="muted">No friends yet.</div>';incoming.innerHTML=(d.incoming||[]).map(x=>`<div class="friend"><span>Request from @${esc(x.from.username)}</span><button class="btn" onclick="acceptFriend('${x.id}')">Accept</button></div>`).join('')}catch(e){friends.innerHTML='<div class="danger small">'+esc(e.message)+'</div>'}}
-async function acceptFriend(id){try{await api('/api/friends/accept',{method:'POST',body:JSON.stringify({id})});toast('Friend added');loadFriends()}catch(e){toast(e.message)}}
-async function requestFriend(){try{await api('/api/friends/request',{method:'POST',body:JSON.stringify({username:friendName.value})});toast('Request sent')}catch(e){toast(e.message)}}
-async function invite(){try{const d=await api('/api/invite',{method:'POST'});const link=(API||location.origin)+'/join/'+d.code;try{await navigator.clipboard.writeText(link);toast('Invite copied')}catch{prompt('Copy this invite link:',link)}}catch(e){toast(e.message)}}
-function settingsView(){main.innerHTML=`<div class="chat-head"><div><div class="title">Settings</div><div class="muted">Device and connection settings.</div></div></div><div style="padding:20px"><div class="card"><b>BANG server</b><p class="muted small">Keep this on your private server or local laptop during testing.</p><input class="field" id="api2" value="${API}"/><br><br><button class="btn" onclick="API=api2.value.trim().replace(/\/$/,'');localStorage.setItem('bang_api',API);toast('Saved')">Save</button></div><div class="card"><b>Privacy</b><p class="muted">BANG does not need your real name. Use a nickname and only share invites with people you trust.</p></div></div>`}
-function logout(){token='';me=null;localStorage.removeItem('bang_token');localStorage.removeItem('bang_user');ws?.close();showAuth()}
+button {
+  cursor: pointer;
+}
+
+.shell {
+  width: min(1100px, 96vw);
+  margin: auto;
+  padding: 22px;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.brand {
+  font-size: 34px;
+  font-weight: 950;
+  letter-spacing: -1px;
+}
+
+.pill {
+  padding: 8px 12px;
+  border: 1px solid #ffffff20;
+  border-radius: 999px;
+  background: #ffffff0b;
+  color: #b8c0dd;
+  font-size: 13px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.panel,
+.chatbox,
+.auth {
+  border: 1px solid #ffffff15;
+  border-radius: 26px;
+  background: #ffffff09;
+  box-shadow: 0 25px 70px #0007;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.panel {
+  padding: 18px;
+}
+
+.profile {
+  padding: 14px;
+  border: 1px solid #ffffff14;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #6d5dfc33, #24d5ff18);
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #7c6cff, #36d1dc);
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.muted {
+  color: #9ba5c4;
+  font-size: 13px;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.nav {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.nav button {
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: #cfd5eb;
+  font-weight: 700;
+  text-align: left;
+}
+
+.nav button:hover,
+.nav button.active {
+  background: #ffffff12;
+  color: #fff;
+}
+
+.chatbox {
+  display: flex;
+  flex-direction: column;
+  min-height: 72vh;
+  overflow: hidden;
+}
+
+.chat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid #ffffff12;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.messages {
+  flex: 1;
+  min-height: 380px;
+  padding: 20px;
+  overflow: auto;
+}
+
+.msg {
+  max-width: 72%;
+  margin: 9px 0;
+  padding: 11px 14px;
+  border: 1px solid #ffffff0c;
+  border-radius: 17px;
+  background: #ffffff0d;
+  overflow-wrap: anywhere;
+}
+
+.msg.me {
+  margin-left: auto;
+  border: 0;
+  background: linear-gradient(135deg, #6658e8, #3b82f6);
+}
+
+.meta {
+  margin-bottom: 4px;
+  color: #aeb7d1;
+  font-size: 11px;
+}
+
+.composer {
+  display: flex;
+  gap: 9px;
+  padding: 14px;
+  border-top: 1px solid #ffffff12;
+}
+
+.composer input,
+.field {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #ffffff18;
+  border-radius: 14px;
+  outline: none;
+  background: #050811;
+  color: #fff;
+}
+
+.composer input:focus,
+.field:focus {
+  border-color: #7c6cff;
+}
+
+.btn {
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  color: #111;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.secondary {
+  border: 1px solid #ffffff18;
+  background: #ffffff12;
+  color: #fff;
+}
+
+.join,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notice {
+  margin: 14px 20px 0;
+  padding: 11px 13px;
+  border-radius: 13px;
+  background: #f59e0b15;
+  color: #ffd78b;
+  font-size: 12px;
+}
+
+.auth {
+  max-width: 520px;
+  margin: 8vh auto;
+  padding: 28px;
+}
+
+.auth h1 {
+  margin: 0 0 8px;
+}
+
+.form {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.card {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #ffffff12;
+  border-radius: 18px;
+  background: #ffffff07;
+}
+
+.list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.friend {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #ffffff08;
+}
+
+.hidden {
+  display: none;
+}
+
+.danger {
+  color: #ffb4b4;
+}
+
+.code {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  word-break: break-all;
+}
+
+.toggle {
+  cursor: pointer;
+  color: #9fdcff;
+}
+
+.toast {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  display: none;
+  transform: translateX(-50%);
+  padding: 12px 16px;
+  border: 1px solid #ffffff18;
+  border-radius: 14px;
+  background: #161a2c;
+}
+
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    display: none;
+  }
+
+  .shell {
+    width: 100%;
+    padding: 12px;
+  }
+
+  .chatbox {
+    min-height: 86vh;
+  }
+
+  .brand {
+    font-size: 28px;
+  }
+
+  .messages {
+    min-height: 450px;
+  }
+
+  .msg {
+    max-width: 85%;
+  }
+
+  .top {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+</style>
+</head>
+<body>
+<div class="shell" id="app"></div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = value =>
+  String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[character]));
+
+let token = localStorage.getItem('bang_token') || '';
+let me = null;
+let ws = null;
+let API = localStorage.getItem('bang_api') || '';
+
+API = API.replace(/\/$/, '');
+
+try {
+  me = JSON.parse(localStorage.getItem('bang_user') || 'null');
+} catch {
+  localStorage.removeItem('bang_user');
+}
+
+function toast(message) {
+  const element = $('toast');
+  element.textContent = message;
+  element.style.display = 'block';
+
+  clearTimeout(window.toastTimer);
+
+  window.toastTimer = setTimeout(() => {
+    element.style.display = 'none';
+  }, 2200);
+}
+
+function save() {
+  localStorage.setItem('bang_token', token);
+  localStorage.setItem('bang_user', JSON.stringify(me));
+}
+
+function setApi() {
+  const input = $('api');
+  if (!input) return;
+
+  API = input.value.trim().replace(/\/$/, '');
+
+  if (API && !/^https?:\/\//i.test(API)) {
+    API = 'http://' + API;
+  }
+
+  localStorage.setItem('bang_api', API);
+}
+
+function api(path, options = {}) {
+  options.headers = {
+    ...(options.headers || {}),
+    'Content-Type': 'application/json',
+    ...(token ? {
+      Authorization: 'Bearer ' + token
+    } : {})
+  };
+
+  return fetch(API + path, options).then(async response => {
+    let data = {};
+
+    try {
+      data = await response.json();
+    } catch {}
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Request failed');
+    }
+
+    return data;
+  });
+}
+
+function auth() {
+  if (me && token) {
+    showServerGate();
+  } else {
+    showAuth();
+  }
+}
+
+function showAuth() {
+  $('app').innerHTML = `
+    <section class="auth">
+      <div class="brand">💥 BANG</div>
+
+      <p class="muted">
+        Friends, nearby. Private conversations with BANG accounts.
+      </p>
+
+      <div class="form">
+        <input class="field" id="u"
+          placeholder="Username">
+
+        <input class="field" id="n"
+          placeholder="Display name">
+
+        <input class="field" id="p"
+          type="password"
+          placeholder="Password">
+
+        <div class="actions">
+          <button class="btn" onclick="signup()">
+            Create account
+          </button>
+
+          <button class="btn secondary" onclick="login()">
+            Log in
+          </button>
+        </div>
+
+        <div class="card">
+          <span class="toggle" onclick="toggleConnection()">
+            ⚙️ Connection settings
+          </span>
+
+          <div id="connectionSettings"
+            class="hidden"
+            style="margin-top:10px">
+
+            <p class="muted small">
+              Enter your BANG server address for testing.
+            </p>
+
+            <input class="field"
+              id="api"
+              placeholder="http://192.168.1.10:8080"
+              value="${esc(API)}">
+          </div>
+        </div>
+
+        <div id="err" class="small danger"></div>
+      </div>
+    </section>
+  `;
+}
+
+function toggleConnection() {
+  $('connectionSettings')?.classList.toggle('hidden');
+}
+
+async function signup() {
+  setApi();
+
+  if (!API) {
+    $('err').textContent = 'Enter your BANG server address first.';
+    return;
+  }
+
+  try {
+    const data = await api('/api/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: $('u').value.trim(),
+        displayName: $('n').value.trim(),
+        password: $('p').value
+      })
+    });
+
+    token = data.token;
+    me = data.user;
+    save();
+    showAccountCode();
+  } catch (error) {
+    $('err').textContent = error.message;
+  }
+}
+
+async function login() {
+  setApi();
+
+  if (!API) {
+    $('err').textContent = 'Enter your BANG server address first.';
+    return;
+  }
+
+  try {
+    const data = await api('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: $('u').value.trim(),
+        password: $('p').value
+      })
+    });
+
+    token = data.token;
+    me = data.user;
+    save();
+    showServerGate();
+  } catch (error) {
+    $('err').textContent = error.message;
+  }
+}
+
+function showAccountCode() {
+  $('app').innerHTML = `
+    <section class="auth">
+      <div class="brand">💥 BANG</div>
+
+      <h1>Account created 🎉</h1>
+
+      <p class="muted">
+        Keep this account code private.
+      </p>
+
+      <div class="card">
+        <div class="muted small">YOUR ACCOUNT CODE</div>
+        <div class="code">
+          ${esc(me.accountCode || 'Generating…')}
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:14px">
+        <button class="btn" onclick="copyAccountCode()">
+          Copy code
+        </button>
+
+        <button class="btn secondary" onclick="showServerGate()">
+          Continue
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function copyAccountCode() {
+  navigator.clipboard?.writeText(me.accountCode);
+  toast('Account code copied');
+}
+
+async function showServerGate() {
+  try {
+    const data = await api('/api/server');
+    window.serverCode = data.serverCode;
+
+    $('app').innerHTML = `
+      <section class="auth">
+        <div class="brand">💥 BANG</div>
+
+        <h1>Connect to BANG</h1>
+
+        <p class="muted">
+          Logged in as <b>@${esc(me.username)}</b>.
+        </p>
+
+        <div class="card">
+          <div class="muted small">BANG SERVER CODE</div>
+          <div class="code">${esc(window.serverCode)}</div>
+        </div>
+
+        <div class="form">
+          <input class="field"
+            id="serverCodeInput"
+            placeholder="Enter server code">
+
+          <button class="btn" onclick="joinServer()">
+            Continue to BANG
+          </button>
+
+          <div id="err" class="small danger"></div>
+        </div>
+      </section>
+    `;
+  } catch {
+    showHome();
+    toast('Server connection is unavailable');
+  }
+}
+
+async function joinServer() {
+  const code = $('serverCodeInput').value.trim().toUpperCase();
+
+  try {
+    await api('/api/server/join', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    });
+
+    localStorage.setItem('bang_server_code', code);
+    showHome();
+  } catch (error) {
+    $('err').textContent = error.message;
+  }
+}
+
+function showHome() {
+  $('app').innerHTML = `
+    <header class="top">
+      <div>
+        <div class="brand">💥 BANG</div>
+        <div class="muted">
+          Private chats. Nearby rooms. No public feed.
+        </div>
+      </div>
+
+      <div class="pill" id="connection">
+        ⚪ Ready
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="panel">
+        <div class="profile">
+          <div class="profile-row">
+            <div class="avatar">
+              ${esc((me.displayName || me.username)[0].toUpperCase())}
+            </div>
+
+            <div>
+              <b>${esc(me.displayName || me.username)}</b>
+              <div class="muted">@${esc(me.username)}</div>
+              <div class="muted small">
+                ${esc(me.accountCode || '')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav">
+          <button class="active" onclick="chatView()">
+            💬 Chats
+          </button>
+
+          <button onclick="callsView()">
+            📞 Calls
+          </button>
+
+          <button onclick="friendsView()">
+            👥 Friends
+          </button>
+
+          <button onclick="invite()">
+            🔗 Create invite
+          </button>
+
+          <button onclick="settingsView()">
+            ⚙️ Settings
+          </button>
+
+          <button onclick="logout()">
+            ↪ Log out
+          </button>
+        </div>
+      </aside>
+
+      <main class="chatbox" id="main"></main>
+    </section>
+  `;
+
+  chatView();
+}
+
+function chatView() {
+  $('main').innerHTML = `
+    <div class="chat-head">
+      <div>
+        <div class="title">Nearby room</div>
+        <div class="muted" id="roomStatus">
+          Connect to a BANG server or start Mesh mode.
+        </div>
+      </div>
+
+      <span class="pill">🔒 Private</span>
+    </div>
+
+    <div class="notice">
+      🛰️ Mesh mode uses BLE for nearby discovery and encrypted links
+      for small text messages.
+    </div>
+
+    <div id="meshPeers"
+      class="card"
+      style="margin:14px 20px 0">
+
+      <b>📡 Nearby BANG phones</b>
+
+      <div class="muted small" id="meshPeerStatus">
+        Mesh is off.
+      </div>
+
+      <div id="meshPeerList" class="list"></div>
+    </div>
+
+    <div id="messages" class="messages"></div>
+
+    <div class="composer">
+      <input id="text"
+        placeholder="Type a message…"
+        onkeydown="if(event.key === 'Enter') sendMessage()">
+
+      <button class="btn"
+        id="sendButton"
+        onclick="sendMessage()">
+
+        Send
+      </button>
+    </div>
+
+    <div class="join" style="padding:0 14px 14px">
+      <button class="btn" onclick="connect()">
+        Internet/Server
+      </button>
+
+      <button class="btn" onclick="startMesh()">
+        📡 Start Mesh
+      </button>
+
+      <button class="btn secondary" onclick="stopMesh()">
+        Stop Mesh
+      </button>
+
+      <button class="btn secondary" onclick="clearChat()">
+        Clear
+      </button>
+    </div>
+  `;
+}
+
+function connect() {
+  if (!API) {
+    toast('Set your server in Settings');
+    return;
+  }
+
+  const connection = $('connection');
+  const roomStatus = $('roomStatus');
+  const text = $('text');
+  const sendButton = $('sendButton');
+
+  const protocol = API.startsWith('https') ? 'wss' : 'ws';
+  const host = API.replace(/^https?:\/\//, '');
+
+  ws = new WebSocket(`${protocol}://${host}`);
+
+  ws.onopen = () => {
+    connection.textContent = '🟢 Connected';
+    roomStatus.textContent = 'Connected to your BANG room';
+    text.disabled = false;
+    sendButton.disabled = false;
+
+    ws.send(JSON.stringify({
+      type: 'join',
+      name: me.displayName,
+      username: me.username
+    }));
+  };
+
+  ws.onmessage = event => {
+    try {
+      const message = JSON.parse(event.data);
+
+      if (message.type === 'chat') {
+        addMessage(message.text, false, message.name);
+      }
+
+      if (message.type === 'presence') {
+        roomStatus.textContent = message.text;
+      }
+    } catch {
+      toast('Invalid server response');
+    }
+  };
+
+  ws.onerror = () => {
+    toast('Unable to connect to the BANG server');
+  };
+
+  ws.onclose = () => {
+    connection.textContent = '⚪ Disconnected';
+    text.disabled = true;
+    sendButton.disabled = true;
+  };
+}
+
+function sendMessage() {
+  const input = $('text');
+  const message = input.value.trim();
+
+  if (!message) return;
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'chat',
+      name: me.displayName,
+      username: me.username,
+      text: message
+    }));
+
+    addMessage(message, true, 'You');
+    input.value = '';
+    return;
+  }
+
+  if (window.BangMesh) {
+    window.BangMesh.send(message);
+    addMessage(message, true, 'Mesh');
+    input.value = '';
+    return;
+  }
+
+  toast('Connect to BANG or start Mesh mode');
+}
+
+function addMessage(text, own, label) {
+  const messages = $('messages');
+  if (!messages) return;
+
+  const message = document.createElement('div');
+  message.className = 'msg' + (own ? ' me' : '');
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = own ? 'You' : label || 'BANG';
+
+  const body = document.createElement('div');
+  body.textContent = text;
+
+  message.append(meta, body);
+  messages.appendChild(message);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function clearChat() {
+  $('messages').innerHTML = '';
+}
+
+function startMesh() {
+  if (!window.BangMesh) {
+    toast('Mesh is available in the Android app build');
+    return;
+  }
+
+  window.BangMesh.start();
+}
+
+function stopMesh() {
+  window.BangMesh?.stop();
+  toast('Mesh stopped');
+}
+
+window.bangMeshEvent = function(type, text) {
+  if (type === 'status') {
+    if ($('meshPeerStatus')) {
+      $('meshPeerStatus').textContent = text;
+    }
+
+    if ($('roomStatus')) {
+      $('roomStatus').textContent = text;
+    }
+  }
+
+  if (type === 'error') {
+    toast(text);
+  }
+
+  if (type === 'peer_connected') {
+    toast('🔐 Encrypted mesh link ready');
+  }
+
+  if (type === 'wifi_host') {
+    toast('Voice relay ready at ' + text);
+  }
+
+  if (type === 'wifi_status' || type === 'relay_status') {
+    toast(text);
+  }
+};
+
+window.bangMeshPeer = function(name, address) {
+  window.bangPeers = window.bangPeers || [];
+
+  if (!window.bangPeers.some(peer => peer.address === address)) {
+    window.bangPeers.push({ name, address });
+  }
+
+  const list = $('meshPeerList');
+  if (!list) return;
+
+  const id = 'peer_' +
+    address.replace(/[^a-zA-Z0-9]/g, '_');
+
+  if ($(id)) return;
+
+  const row = document.createElement('div');
+  row.className = 'friend';
+  row.id = id;
+
+  const label = document.createElement('span');
+  label.textContent = '📱 ' + name;
+
+  const info = document.createElement('div');
+  info.className = 'muted small';
+  info.textContent = 'Nearby BLE device';
+
+  label.appendChild(info);
+
+  const button = document.createElement('button');
+  button.className = 'btn';
+  button.textContent = 'Connect';
+  button.onclick = () => window.BangMesh?.connect(address);
+
+  row.append(label, button);
+  list.appendChild(row);
+};
+
+window.bangMeshMessage = function(text, name) {
+  addMessage(text, false, (name || 'BANG') + ' • Mesh');
+};
+
+function callsView() {
+  $('main').innerHTML = `
+    <div class="chat-head">
+      <div>
+        <div class="title">Voice calls</div>
+        <div class="muted">
+          BANG voice calling foundation
+        </div>
+      </div>
+
+      <span class="pill">🎙️ Beta</span>
+    </div>
+
+    <div style="padding:20px">
+      <div class="card">
+        <b>📞 Calling</b>
+
+        <p class="muted">
+          Voice calling requires the Android BANG app and Wi-Fi Direct.
+        </p>
+
+        <button class="btn" onclick="startVoice()">
+          🎙️ Start voice
+        </button>
+
+        <button class="btn secondary" onclick="stopVoice()">
+          ⏹ Stop voice
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function startVoice() {
+  window.BangMesh?.startWifiCalls();
+  toast('Starting voice transport…');
+}
+
+function stopVoice() {
+  window.BangMesh?.stopAudio();
+  toast('Voice transport stopped');
+}
+
+async function friendsView() {
+  $('main').innerHTML = `
+    <div class="chat-head">
+      <div>
+        <div class="title">Friends</div>
+        <div class="muted">
+          Keep your circle intentional.
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:20px">
+      <div class="card">
+        <b>📡 Nearby BANG accounts</b>
+
+        <p class="muted small">
+          Accounts connected to this BANG server appear here.
+        </p>
+
+        <button class="btn" onclick="nearby()">
+          Find nearby accounts
+        </button>
+
+        <div id="nearbyList" class="list"></div>
+      </div>
+
+      <div class="actions" style="margin-top:14px">
+        <input class="field"
+          id="friendName"
+          placeholder="Username">
+
+        <button class="btn" onclick="requestFriend()">
+          Send request
+        </button>
+      </div>
+
+      <div id="friends" class="list"></div>
+      <div id="incoming" class="list"></div>
+    </div>
+  `;
+
+  loadFriends();
+}
+
+async function nearby() {
+  try {
+    const data = await api('/api/nearby');
+    const list = $('nearbyList');
+
+    list.innerHTML = (data.users || []).map(user => `
+      <div class="friend">
+        <span>
+          @${esc(user.username)}
+          <div class="muted small">
+            ${esc(user.displayName || '')}
+          </div>
+        </span>
+
+        <button class="btn"
+          onclick="requestByName(${JSON.stringify(user.username)})">
+          Add
+        </button>
+      </div>
+    `).join('') ||
+      '<div class="muted">No nearby accounts.</div>';
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function requestByName(username) {
+  $('friendName').value = username;
+  requestFriend();
+}
+
+async function loadFriends() {
+  try {
+    const data = await api('/api/friends');
+
+    $('friends').innerHTML = (data.friends || []).map(friend => `
+      <div class="friend">
+        <span>@${esc(friend.username)}</span>
+        <span class="muted">
+          ${esc(friend.displayName || '')}
+        </span>
+      </div>
+    `).join('') ||
+      '<div class="muted">No friends yet.</div>';
+
+    $('incoming').innerHTML = (data.incoming || []).map(request => `
+      <div class="friend">
+        <span>
+          Request from @${esc(request.from.username)}
+        </span>
+
+        <button class="btn"
+          onclick="acceptFriend(${JSON.stringify(request.id)})">
+          Accept
+        </button>
+      </div>
+    `).join('');
+  } catch (error) {
+    $('friends').innerHTML =
+      `<div class="danger small">${esc(error.message)}</div>`;
+  }
+}
+
+async function requestFriend() {
+  const username = $('friendName').value.trim();
+
+  if (!username) {
+    toast('Enter a username');
+    return;
+  }
+
+  try {
+    await api('/api/friends/request', {
+      method: 'POST',
+      body: JSON.stringify({ username })
+    });
+
+    $('friendName').value = '';
+    toast('Request sent');
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function acceptFriend(id) {
+  try {
+    await api('/api/friends/accept', {
+      method: 'POST',
+      body: JSON.stringify({ id })
+    });
+
+    toast('Friend added');
+    loadFriends();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function invite() {
+  try {
+    const data = await api('/api/invite', {
+      method: 'POST'
+    });
+
+    const link = `${API}/join/${data.code}`;
+
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('Invite copied');
+    } catch {
+      prompt('Copy this invite link:', link);
+    }
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function settingsView() {
+  $('main').innerHTML = `
+    <div class="chat-head">
+      <div>
+        <div class="title">Settings</div>
+        <div class="muted">
+          Device and connection settings.
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:20px">
+      <div class="card">
+        <b>BANG server</b>
+
+        <p class="muted small">
+          Enter the address of your BANG backend server.
+        </p>
+
+        <input class="field"
+          id="api2"
+          value="${esc(API)}">
+
+        <br><br>
+
+        <button class="btn" onclick="saveSettingsApi()">
+          Save
+        </button>
+      </div>
+
+      <div class="card">
+        <b>Privacy</b>
+
+        <p class="muted">
+          BANG does not need your real name. Use a nickname and only
+          share invites with people you trust.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function saveSettingsApi() {
+  API = $('api2').value.trim().replace(/\/$/, '');
+
+  if (API && !/^https?:\/\//i.test(API)) {
+    API = 'http://' + API;
+  }
+
+  localStorage.setItem('bang_api', API);
+  toast('Server address saved');
+}
+
+function logout() {
+  token = '';
+  me = null;
+
+  localStorage.removeItem('bang_token');
+  localStorage.removeItem('bang_user');
+
+  ws?.close();
+  showAuth();
+}
+
 auth();
-</script></body></html>
+</script>
+</body>
+</html>
