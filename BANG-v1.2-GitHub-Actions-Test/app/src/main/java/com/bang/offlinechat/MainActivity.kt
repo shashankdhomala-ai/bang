@@ -1,4 +1,3 @@
-```kotlin
 package com.bang.offlinechat
 
 import android.Manifest
