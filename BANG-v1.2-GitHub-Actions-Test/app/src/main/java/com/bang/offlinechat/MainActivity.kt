@@ -23,6 +23,7 @@ class MainActivity : Activity() {
     private lateinit var wifiCalls: WifiDirectCallManager
     private lateinit var audio: AudioCallEngine
     private lateinit var relay: RelayAudioEngine
+    private var apiInjected = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,13 +54,14 @@ class MainActivity : Activity() {
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
-                val api = BuildConfig.BANG_API_URL
-                if (api.isNotBlank()) {
+                val api = BuildConfig.BANG_API_URL.trim().removeSuffix("/")
+                if (!apiInjected && api.isNotBlank()) {
                     val escaped = api.replace("\\", "\\\\").replace("'", "\\'")
-                    view.evaluateJavascript("localStorage.setItem('bang_api','$escaped');", null)
+                    apiInjected = true
+                    view.evaluateJavascript("localStorage.setItem('bang_api','$escaped'); location.reload();", null)
+                    return
                 }
-                // Load mobile enhancements after the existing page has rendered.
-                view.evaluateJavascript("(function(){var s=document.createElement('script');s.src='mobile-enhancements.js';s.onload=function(){console.log('BANG mobile enhancements loaded')};s.onerror=function(){console.warn('BANG mobile enhancements unavailable')};document.body.appendChild(s)})()", null)
+                view.evaluateJavascript("(function(){if(document.getElementById('bang-mobile-enhancements'))return;var s=document.createElement('script');s.id='bang-mobile-enhancements';s.src='mobile-enhancements.js';s.onload=function(){console.log('BANG mobile enhancements loaded')};s.onerror=function(){console.warn('BANG mobile enhancements unavailable')};document.body.appendChild(s)})()", null)
             }
         }
         web.addJavascriptInterface(MeshBridge(), "BangMesh")
