@@ -11,8 +11,8 @@ android {
         applicationId = "com.bang.offlinechat"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.0.1"
+        versionCode = 15
+        versionName = "1.0.2"
     }
 
     buildFeatures {
@@ -80,4 +80,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    implementation("androidx.webkit:webkit:1.17.0")
 }
