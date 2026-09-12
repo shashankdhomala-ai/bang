@@ -1,7 +1,13 @@
 {
-  "name": "bang-offline-chat",
-  "version": "0.6.1",
+  "name": "bang-backend",
+  "version": "1.0.0",
   "private": true,
-  "scripts": { "start": "node backend/server.js" },
-  "dependencies": { "ws": "^8.18.0" }
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
 }
