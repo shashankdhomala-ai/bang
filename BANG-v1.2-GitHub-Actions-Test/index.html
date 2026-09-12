@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#090b18">
 <title>BANG — Friends, Nearby.</title>
+
 <style>
 * {
-box-sizing: border-box;
+  box-sizing: border-box;
 }
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -297,11 +299,6 @@ button {
   word-break: break-all;
 }
 
-.toggle {
-  cursor: pointer;
-  color: #9fdcff;
-}
-
 .toast {
   position: fixed;
   bottom: 22px;
@@ -312,6 +309,7 @@ button {
   border: 1px solid #ffffff18;
   border-radius: 14px;
   background: #161a2c;
+  z-index: 9999;
 }
 
 @media (max-width: 760px) {
@@ -352,11 +350,33 @@ button {
 }
 </style>
 </head>
+
 <body>
+
 <div class="shell" id="app"></div>
 <div class="toast" id="toast"></div>
+
 <script>
+/* =========================================================
+   BANG CONFIGURATION
+   ========================================================= */
+
+const BANG_SERVER = 'http://192.168.1.11:8080';
+
+let API = BANG_SERVER;
+
+localStorage.setItem('bang_api', BANG_SERVER);
+
+let me = null;
+let ws = null;
+let token = localStorage.getItem('bang_token') || '';
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
 const $ = id => document.getElementById(id);
+
 const esc = value =>
   String(value ?? '').replace(/[&<>"']/g, character => ({
     '&': '&amp;',
@@ -366,23 +386,26 @@ const esc = value =>
     "'": '&#39;'
   }[character]));
 
-let API = localStorage.getItem('bang_api') || 'http://192.168.1.11:8080';
-API = API.replace(/\/$/, '');
-localStorage.setItem('bang_api', API);
-
-let me = null;
-let ws = null;
-let token = localStorage.getItem('bang_token') || '';
-API = API.replace(/\/$/, '');
+/* Restore saved user */
 
 try {
-  me = JSON.parse(localStorage.getItem('bang_user') || 'null');
+  me = JSON.parse(
+    localStorage.getItem('bang_user') || 'null'
+  );
 } catch {
   localStorage.removeItem('bang_user');
+  me = null;
 }
+
+/* =========================================================
+   TOAST
+   ========================================================= */
 
 function toast(message) {
   const element = $('toast');
+
+  if (!element) return;
+
   element.textContent = message;
   element.style.display = 'block';
 
@@ -393,49 +416,69 @@ function toast(message) {
   }, 2200);
 }
 
+/* =========================================================
+   SAVE LOGIN
+   ========================================================= */
+
 function save() {
   localStorage.setItem('bang_token', token);
-  localStorage.setItem('bang_user', JSON.stringify(me));
+  localStorage.setItem(
+    'bang_user',
+    JSON.stringify(me)
+  );
+
+  localStorage.setItem(
+    'bang_api',
+    BANG_SERVER
+  );
 }
 
-function setApi() {
-  const input = $('api');
-  if (!input) return;
-
-  API = input.value.trim().replace(/\/$/, '');
-
-  if (API && !/^https?:\/\//i.test(API)) {
-    API = 'http://' + API;
-  }
-
-  localStorage.setItem('bang_api', API);
-}
+/* =========================================================
+   API REQUEST
+   ========================================================= */
 
 function api(path, options = {}) {
+
+  API = BANG_SERVER;
+
   options.headers = {
     ...(options.headers || {}),
     'Content-Type': 'application/json',
-    ...(token ? {
-      Authorization: 'Bearer ' + token
-    } : {})
+
+    ...(token
+      ? {
+          Authorization: 'Bearer ' + token
+        }
+      : {})
   };
 
-  return fetch(API + path, options).then(async response => {
-    let data = {};
+  return fetch(API + path, options)
+    .then(async response => {
 
-    try {
-      data = await response.json();
-    } catch {}
+      let data = {};
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Request failed');
-    }
+      try {
+        data = await response.json();
+      } catch {}
 
-    return data;
-  });
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Request failed'
+        );
+      }
+
+      return data;
+    });
 }
 
+/* =========================================================
+   AUTH
+   ========================================================= */
+
 function auth() {
+
+  API = BANG_SERVER;
+
   if (me && token) {
     showServerGate();
   } else {
@@ -443,444 +486,962 @@ function auth() {
   }
 }
 
+/* =========================================================
+   LOGIN / SIGNUP SCREEN
+   ========================================================= */
+
 function showAuth() {
+
   $('app').innerHTML = `
     <section class="auth">
-      <div class="brand">💥 BANG</div>
+
+      <div class="brand">
+        💥 BANG
+      </div>
 
       <p class="muted">
-        Friends, nearby. Private conversations with BANG accounts.
+        Friends, nearby. Private conversations
+        with BANG accounts.
       </p>
 
       <div class="form">
-        <input class="field" id="u"
-          placeholder="Username">
 
-        <input class="field" id="n"
+        <input
+          class="field"
+          id="u"
+          placeholder="Username"
+          autocomplete="username">
+
+        <input
+          class="field"
+          id="n"
           placeholder="Display name">
 
-        <input class="field" id="p"
+        <input
+          class="field"
+          id="p"
           type="password"
-          placeholder="Password">
+          placeholder="Password"
+          autocomplete="current-password">
 
         <div class="actions">
-          <button class="btn" onclick="signup()">
+
+          <button
+            class="btn"
+            onclick="signup()">
             Create account
           </button>
 
-          <button class="btn secondary" onclick="login()">
+          <button
+            class="btn secondary"
+            onclick="login()">
             Log in
           </button>
+
         </div>
 
-     <div class="card">
-  <span class="toggle" onclick="toggleConnection()">
-    ⚙️ Connection settings
-  </span>
+        <div
+          id="err"
+          class="small danger">
+        </div>
 
-  <div id="connectionSettings"
-    class="hidden"
-    style="margin-top:10px">
-
-    <p class="muted small">
-      Enter your BANG server address for testing.
-    </p>
-
-    <input class="field"
-      id="api"
-      placeholder="http://192.168.1.10:8080"
-      value="${esc(API)}">
-  </div>
-</div>
-
-        <div id="err" class="small danger"></div>
       </div>
+
     </section>
   `;
 }
 
-function toggleConnection() {
-  $('connectionSettings')?.classList.toggle('hidden');
-}
+/* =========================================================
+   SIGNUP
+   ========================================================= */
 
 async function signup() {
-  API = 'http://192.168.1.11:8080';
+
+  API = BANG_SERVER;
+
+  const username =
+    $('u').value.trim();
+
+  const displayName =
+    $('n').value.trim();
+
+  const password =
+    $('p').value;
+
+  if (!username) {
+    $('err').textContent =
+      'Enter a username.';
+    return;
+  }
+
+  if (!displayName) {
+    $('err').textContent =
+      'Enter a display name.';
+    return;
+  }
+
+  if (!password) {
+    $('err').textContent =
+      'Enter a password.';
+    return;
+  }
 
   try {
-    const data = await api('/api/signup', {
-      method: 'POST',
-      body: JSON.stringify({
-        username: $('u').value.trim(),
-        displayName: $('n').value.trim(),
-        password: $('p').value
-      })
-    });
+
+    const data = await api(
+      '/api/signup',
+      {
+        method: 'POST',
+
+        body: JSON.stringify({
+          username,
+          displayName,
+          password
+        })
+      }
+    );
 
     token = data.token;
     me = data.user;
+
     save();
+
     showAccountCode();
+
   } catch (error) {
-    $('err').textContent = error.message;
+
+    $('err').textContent =
+      error.message;
   }
 }
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
 
 async function login() {
-API = 'http://192.168.1.11:8080';
+
+  API = BANG_SERVER;
+
+  const username =
+    $('u').value.trim();
+
+  const password =
+    $('p').value;
+
+  if (!username) {
+    $('err').textContent =
+      'Enter your username.';
+    return;
+  }
+
+  if (!password) {
+    $('err').textContent =
+      'Enter your password.';
+    return;
+  }
 
   try {
-    const data = await api('/api/login', {
-      method: 'POST',
-      body: JSON.stringify({
-        username: $('u').value.trim(),
-        password: $('p').value
-      })
-    });
+
+    const data = await api(
+      '/api/login',
+      {
+        method: 'POST',
+
+        body: JSON.stringify({
+          username,
+          password
+        })
+      }
+    );
 
     token = data.token;
     me = data.user;
+
     save();
+
     showServerGate();
+
   } catch (error) {
-    $('err').textContent = error.message;
+
+    $('err').textContent =
+      error.message;
   }
 }
 
+/* =========================================================
+   ACCOUNT CODE
+   ========================================================= */
+
 function showAccountCode() {
+
   $('app').innerHTML = `
     <section class="auth">
-      <div class="brand">💥 BANG</div>
 
-      <h1>Account created 🎉</h1>
+      <div class="brand">
+        💥 BANG
+      </div>
+
+      <h1>
+        Account created 🎉
+      </h1>
 
       <p class="muted">
         Keep this account code private.
       </p>
 
       <div class="card">
-        <div class="muted small">YOUR ACCOUNT CODE</div>
-        <div class="code">
-          ${esc(me.accountCode || 'Generating…')}
+
+        <div class="muted small">
+          YOUR ACCOUNT CODE
         </div>
+
+        <div class="code">
+          ${esc(
+            me.accountCode ||
+            'Generating…'
+          )}
+        </div>
+
       </div>
 
-      <div class="actions" style="margin-top:14px">
-        <button class="btn" onclick="copyAccountCode()">
+      <div
+        class="actions"
+        style="margin-top:14px">
+
+        <button
+          class="btn"
+          onclick="copyAccountCode()">
           Copy code
         </button>
 
-        <button class="btn secondary" onclick="showServerGate()">
+        <button
+          class="btn secondary"
+          onclick="showServerGate()">
           Continue
         </button>
+
       </div>
+
     </section>
   `;
 }
 
+/* =========================================================
+   COPY ACCOUNT CODE
+   ========================================================= */
+
 function copyAccountCode() {
-  navigator.clipboard?.writeText(me.accountCode);
-  toast('Account code copied');
+
+  const code =
+    me?.accountCode || '';
+
+  if (!code) {
+    toast('Account code unavailable');
+    return;
+  }
+
+  if (
+    navigator.clipboard &&
+    navigator.clipboard.writeText
+  ) {
+
+    navigator.clipboard
+      .writeText(code)
+      .then(() => {
+        toast('Account code copied');
+      })
+      .catch(() => {
+        toast('Copy failed');
+      });
+
+  } else {
+
+    toast('Copy not supported');
+  }
 }
 
+/* =========================================================
+   SERVER CODE SCREEN
+   ========================================================= */
+
 async function showServerGate() {
+
+  API = BANG_SERVER;
+
   try {
-    const data = await api('/api/server');
-    window.serverCode = data.serverCode;
+
+    const data =
+      await api('/api/server');
+
+    window.serverCode =
+      data.serverCode;
 
     $('app').innerHTML = `
       <section class="auth">
-        <div class="brand">💥 BANG</div>
 
-        <h1>Connect to BANG</h1>
+        <div class="brand">
+          💥 BANG
+        </div>
+
+        <h1>
+          Connect to BANG
+        </h1>
 
         <p class="muted">
-          Logged in as <b>@${esc(me.username)}</b>.
+          Logged in as
+          <b>@${esc(me.username)}</b>.
         </p>
 
         <div class="card">
-          <div class="muted small">BANG SERVER CODE</div>
-          <div class="code">${esc(window.serverCode)}</div>
+
+          <div class="muted small">
+            BANG SERVER CODE
+          </div>
+
+          <div class="code">
+            ${esc(window.serverCode)}
+          </div>
+
         </div>
 
         <div class="form">
-          <input class="field"
-            id="serverCodeInput"
-            placeholder="Enter server code">
 
-          <button class="btn" onclick="joinServer()">
+          <input
+            class="field"
+            id="serverCodeInput"
+            placeholder="Enter server code"
+            autocomplete="off">
+
+          <button
+            class="btn"
+            onclick="joinServer()">
             Continue to BANG
           </button>
 
-          <div id="err" class="small danger"></div>
+          <div
+            id="err"
+            class="small danger">
+          </div>
+
         </div>
+
       </section>
     `;
-  } catch {
-    showHome();
-    toast('Server connection is unavailable');
-  }
-}
 
-async function joinServer() {
-  const code = $('serverCodeInput').value.trim().toUpperCase();
-
-  try {
-    await api('/api/server/join', {
-      method: 'POST',
-      body: JSON.stringify({ code })
-    });
-
-    localStorage.setItem('bang_server_code', code);
-    showHome();
   } catch (error) {
-    $('err').textContent = error.message;
-  }
-}
 
-function showHome() {
-  $('app').innerHTML = `
-    <header class="top">
-      <div>
-        <div class="brand">💥 BANG</div>
-        <div class="muted">
-          Private chats. Nearby rooms. No public feed.
+    $('app').innerHTML = `
+      <section class="auth">
+
+        <div class="brand">
+          💥 BANG
         </div>
-      </div>
 
-      <div class="pill" id="connection">
-        ⚪ Ready
-      </div>
-    </header>
+        <h1>
+          Server unavailable
+        </h1>
 
-    <section class="layout">
-      <aside class="panel">
-        <div class="profile">
-          <div class="profile-row">
-            <div class="avatar">
-              ${esc((me.displayName || me.username)[0].toUpperCase())}
-            </div>
+        <p class="muted">
+          BANG could not connect to the
+          server at:
+        </p>
 
-            <div>
-              <b>${esc(me.displayName || me.username)}</b>
-              <div class="muted">@${esc(me.username)}</div>
-              <div class="muted small">
-                ${esc(me.accountCode || '')}
-              </div>
-            </div>
+        <div class="card">
+          <div class="code">
+            ${esc(BANG_SERVER)}
           </div>
         </div>
 
+        <p class="danger small">
+          Make sure the BANG backend is running
+          on your laptop and both devices are
+          connected to the same Wi-Fi.
+        </p>
+
+        <button
+          class="btn"
+          onclick="showServerGate()">
+          Try again
+        </button>
+
+      </section>
+    `;
+
+  }
+}
+
+/* =========================================================
+   JOIN SERVER
+   ========================================================= */
+
+async function joinServer() {
+
+  const input =
+    $('serverCodeInput');
+
+  if (!input) return;
+
+  const code =
+    input.value
+      .trim()
+      .toUpperCase();
+
+  if (!code) {
+
+    $('err').textContent =
+      'Enter the server code.';
+
+    return;
+  }
+
+  try {
+
+    await api(
+      '/api/server/join',
+      {
+        method: 'POST',
+
+        body: JSON.stringify({
+          code
+        })
+      }
+    );
+
+    localStorage.setItem(
+      'bang_server_code',
+      code
+    );
+
+    showHome();
+
+  } catch (error) {
+
+    $('err').textContent =
+      error.message;
+  }
+}
+
+/* =========================================================
+   HOME
+   ========================================================= */
+
+function showHome() {
+
+  $('app').innerHTML = `
+    <header class="top">
+
+      <div>
+
+        <div class="brand">
+          💥 BANG
+        </div>
+
+        <div class="muted">
+          Private chats. Nearby rooms.
+          No public feed.
+        </div>
+
+      </div>
+
+      <div
+        class="pill"
+        id="connection">
+        ⚪ Ready
+      </div>
+
+    </header>
+
+    <section class="layout">
+
+      <aside class="panel">
+
+        <div class="profile">
+
+          <div class="profile-row">
+
+            <div class="avatar">
+              ${esc(
+                (
+                  me.displayName ||
+                  me.username ||
+                  '?'
+                )[0].toUpperCase()
+              )}
+            </div>
+
+            <div>
+
+              <b>
+                ${esc(
+                  me.displayName ||
+                  me.username
+                )}
+              </b>
+
+              <div class="muted">
+                @${esc(me.username)}
+              </div>
+
+              <div class="muted small">
+                ${esc(
+                  me.accountCode || ''
+                )}
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
         <div class="nav">
-          <button class="active" onclick="chatView()">
+
+          <button
+            class="active"
+            onclick="chatView()">
             💬 Chats
           </button>
 
-          <button onclick="callsView()">
+          <button
+            onclick="callsView()">
             📞 Calls
           </button>
 
-          <button onclick="friendsView()">
+          <button
+            onclick="friendsView()">
             👥 Friends
           </button>
 
-          <button onclick="invite()">
+          <button
+            onclick="invite()">
             🔗 Create invite
           </button>
 
-          <button onclick="settingsView()">
+          <button
+            onclick="settingsView()">
             ⚙️ Settings
           </button>
 
-          <button onclick="logout()">
+          <button
+            onclick="logout()">
             ↪ Log out
           </button>
+
         </div>
+
       </aside>
 
-      <main class="chatbox" id="main"></main>
+      <main
+        class="chatbox"
+        id="main">
+      </main>
+
     </section>
   `;
 
   chatView();
 }
 
+/* =========================================================
+   CHAT VIEW
+   ========================================================= */
+
 function chatView() {
+
   $('main').innerHTML = `
     <div class="chat-head">
+
       <div>
-        <div class="title">Nearby room</div>
-        <div class="muted" id="roomStatus">
-          Connect to a BANG server or start Mesh mode.
+
+        <div class="title">
+          Nearby room
         </div>
+
+        <div
+          class="muted"
+          id="roomStatus">
+          Connect to a BANG server
+          or start Mesh mode.
+        </div>
+
       </div>
 
-      <span class="pill">🔒 Private</span>
+      <span class="pill">
+        🔒 Private
+      </span>
+
     </div>
 
     <div class="notice">
-      🛰️ Mesh mode uses BLE for nearby discovery and encrypted links
-      for small text messages.
+      🛰️ Mesh mode uses BLE for nearby
+      discovery and encrypted links for
+      small text messages.
     </div>
 
-    <div id="meshPeers"
+    <div
+      id="meshPeers"
       class="card"
       style="margin:14px 20px 0">
 
-      <b>📡 Nearby BANG phones</b>
+      <b>
+        📡 Nearby BANG phones
+      </b>
 
-      <div class="muted small" id="meshPeerStatus">
+      <div
+        class="muted small"
+        id="meshPeerStatus">
         Mesh is off.
       </div>
 
-      <div id="meshPeerList" class="list"></div>
+      <div
+        id="meshPeerList"
+        class="list">
+      </div>
+
     </div>
 
-    <div id="messages" class="messages"></div>
+    <div
+      id="messages"
+      class="messages">
+    </div>
 
     <div class="composer">
-      <input id="text"
+
+      <input
+        id="text"
         placeholder="Type a message…"
         onkeydown="if(event.key === 'Enter') sendMessage()">
 
-      <button class="btn"
+      <button
+        class="btn"
         id="sendButton"
         onclick="sendMessage()">
-
         Send
       </button>
+
     </div>
 
-    <div class="join" style="padding:0 14px 14px">
-      <button class="btn" onclick="connect()">
+    <div
+      class="join"
+      style="padding:0 14px 14px">
+
+      <button
+        class="btn"
+        onclick="connect()">
         Internet/Server
       </button>
 
-      <button class="btn" onclick="startMesh()">
+      <button
+        class="btn"
+        onclick="startMesh()">
         📡 Start Mesh
       </button>
 
-      <button class="btn secondary" onclick="stopMesh()">
+      <button
+        class="btn secondary"
+        onclick="stopMesh()">
         Stop Mesh
       </button>
 
-      <button class="btn secondary" onclick="clearChat()">
+      <button
+        class="btn secondary"
+        onclick="clearChat()">
         Clear
       </button>
+
     </div>
   `;
+
+  const text =
+    $('text');
+
+  const sendButton =
+    $('sendButton');
+
+  if (text) {
+    text.disabled = true;
+  }
+
+  if (sendButton) {
+    sendButton.disabled = true;
+  }
 }
 
+/* =========================================================
+   CONNECT TO SERVER
+   ========================================================= */
+
 function connect() {
-  if (!API) {
-    toast('Set your server in Settings');
+
+  API = BANG_SERVER;
+
+  const connection =
+    $('connection');
+
+  const roomStatus =
+    $('roomStatus');
+
+  const text =
+    $('text');
+
+  const sendButton =
+    $('sendButton');
+
+  if (!connection ||
+      !roomStatus ||
+      !text ||
+      !sendButton) {
     return;
   }
 
-  const connection = $('connection');
-  const roomStatus = $('roomStatus');
-  const text = $('text');
-  const sendButton = $('sendButton');
+  const protocol =
+    API.startsWith('https')
+      ? 'wss'
+      : 'ws';
 
-  const protocol = API.startsWith('https') ? 'wss' : 'ws';
-  const host = API.replace(/^https?:\/\//, '');
+  const host =
+    API.replace(
+      /^https?:\/\//,
+      ''
+    );
 
-  ws = new WebSocket(`${protocol}://${host}`);
+  try {
+
+    ws = new WebSocket(
+      `${protocol}://${host}`
+    );
+
+  } catch {
+
+    toast(
+      'Unable to create server connection'
+    );
+
+    return;
+  }
+
+  connection.textContent =
+    '🟡 Connecting…';
+
+  roomStatus.textContent =
+    'Connecting to BANG server…';
 
   ws.onopen = () => {
-    connection.textContent = '🟢 Connected';
-    roomStatus.textContent = 'Connected to your BANG room';
+
+    connection.textContent =
+      '🟢 Connected';
+
+    roomStatus.textContent =
+      'Connected to your BANG room';
+
     text.disabled = false;
     sendButton.disabled = false;
 
-    ws.send(JSON.stringify({
-      type: 'join',
-      name: me.displayName,
-      username: me.username
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'join',
+        name: me.displayName,
+        username: me.username
+      })
+    );
   };
 
   ws.onmessage = event => {
+
     try {
-      const message = JSON.parse(event.data);
+
+      const message =
+        JSON.parse(event.data);
 
       if (message.type === 'chat') {
-        addMessage(message.text, false, message.name);
+
+        addMessage(
+          message.text,
+          false,
+          message.name
+        );
       }
 
       if (message.type === 'presence') {
-        roomStatus.textContent = message.text;
+
+        roomStatus.textContent =
+          message.text;
       }
+
     } catch {
-      toast('Invalid server response');
+
+      toast(
+        'Invalid server response'
+      );
     }
   };
 
   ws.onerror = () => {
-    toast('Unable to connect to the BANG server');
+
+    connection.textContent =
+      '🔴 Connection error';
+
+    roomStatus.textContent =
+      'Could not connect to BANG server';
+
+    toast(
+      'Unable to connect to the BANG server'
+    );
   };
 
   ws.onclose = () => {
-    connection.textContent = '⚪ Disconnected';
+
+    connection.textContent =
+      '⚪ Disconnected';
+
+    roomStatus.textContent =
+      'Disconnected from BANG server';
+
     text.disabled = true;
     sendButton.disabled = true;
   };
 }
 
+/* =========================================================
+   SEND MESSAGE
+   ========================================================= */
+
 function sendMessage() {
-  const input = $('text');
-  const message = input.value.trim();
+
+  const input =
+    $('text');
+
+  if (!input) return;
+
+  const message =
+    input.value.trim();
 
   if (!message) return;
 
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'chat',
-      name: me.displayName,
-      username: me.username,
-      text: message
-    }));
+  if (
+    ws &&
+    ws.readyState === WebSocket.OPEN
+  ) {
 
-    addMessage(message, true, 'You');
+    ws.send(
+      JSON.stringify({
+        type: 'chat',
+        name: me.displayName,
+        username: me.username,
+        text: message
+      })
+    );
+
+    addMessage(
+      message,
+      true,
+      'You'
+    );
+
     input.value = '';
+
     return;
   }
 
   if (window.BangMesh) {
+
     window.BangMesh.send(message);
-    addMessage(message, true, 'Mesh');
+
+    addMessage(
+      message,
+      true,
+      'Mesh'
+    );
+
     input.value = '';
+
     return;
   }
 
-  toast('Connect to BANG or start Mesh mode');
+  toast(
+    'Connect to BANG or start Mesh mode'
+  );
 }
 
-function addMessage(text, own, label) {
-  const messages = $('messages');
+/* =========================================================
+   ADD MESSAGE
+   ========================================================= */
+
+function addMessage(
+  text,
+  own,
+  label
+) {
+
+  const messages =
+    $('messages');
+
   if (!messages) return;
 
-  const message = document.createElement('div');
-  message.className = 'msg' + (own ? ' me' : '');
+  const message =
+    document.createElement('div');
 
-  const meta = document.createElement('div');
-  meta.className = 'meta';
-  meta.textContent = own ? 'You' : label || 'BANG';
+  message.className =
+    'msg' +
+    (own ? ' me' : '');
 
-  const body = document.createElement('div');
-  body.textContent = text;
+  const meta =
+    document.createElement('div');
 
-  message.append(meta, body);
-  messages.appendChild(message);
-  messages.scrollTop = messages.scrollHeight;
+  meta.className =
+    'meta';
+
+  meta.textContent =
+    own
+      ? 'You'
+      : label || 'BANG';
+
+  const body =
+    document.createElement('div');
+
+  body.textContent =
+    text;
+
+  message.append(
+    meta,
+    body
+  );
+
+  messages.appendChild(
+    message
+  );
+
+  messages.scrollTop =
+    messages.scrollHeight;
 }
+
+/* =========================================================
+   CLEAR CHAT
+   ========================================================= */
 
 function clearChat() {
-  $('messages').innerHTML = '';
+
+  const messages =
+    $('messages');
+
+  if (messages) {
+    messages.innerHTML = '';
+  }
 }
 
+/* =========================================================
+   MESH
+   ========================================================= */
+
 function startMesh() {
+
   if (!window.BangMesh) {
-    toast('Mesh is available in the Android app build');
+
+    toast(
+      'Mesh is available in the Android app build'
+    );
+
     return;
   }
 
@@ -888,18 +1449,27 @@ function startMesh() {
 }
 
 function stopMesh() {
+
   window.BangMesh?.stop();
-  toast('Mesh stopped');
+
+  toast(
+    'Mesh stopped'
+  );
 }
 
-window.bangMeshEvent = function(type, text) {
+window.bangMeshEvent =
+function(type, text) {
+
   if (type === 'status') {
+
     if ($('meshPeerStatus')) {
-      $('meshPeerStatus').textContent = text;
+      $('meshPeerStatus')
+        .textContent = text;
     }
 
     if ($('roomStatus')) {
-      $('roomStatus').textContent = text;
+      $('roomStatus')
+        .textContent = text;
     }
   }
 
@@ -908,328 +1478,652 @@ window.bangMeshEvent = function(type, text) {
   }
 
   if (type === 'peer_connected') {
-    toast('🔐 Encrypted mesh link ready');
+
+    toast(
+      '🔐 Encrypted mesh link ready'
+    );
   }
 
   if (type === 'wifi_host') {
-    toast('Voice relay ready at ' + text);
+
+    toast(
+      'Voice relay ready at ' + text
+    );
   }
 
-  if (type === 'wifi_status' || type === 'relay_status') {
+  if (
+    type === 'wifi_status' ||
+    type === 'relay_status'
+  ) {
+
     toast(text);
   }
 };
 
-window.bangMeshPeer = function(name, address) {
-  window.bangPeers = window.bangPeers || [];
+window.bangMeshPeer =
+function(name, address) {
 
-  if (!window.bangPeers.some(peer => peer.address === address)) {
-    window.bangPeers.push({ name, address });
+  window.bangPeers =
+    window.bangPeers || [];
+
+  if (
+    !window.bangPeers.some(
+      peer => peer.address === address
+    )
+  ) {
+
+    window.bangPeers.push({
+      name,
+      address
+    });
   }
 
-  const list = $('meshPeerList');
+  const list =
+    $('meshPeerList');
+
   if (!list) return;
 
-  const id = 'peer_' +
-    address.replace(/[^a-zA-Z0-9]/g, '_');
+  const id =
+    'peer_' +
+    address.replace(
+      /[^a-zA-Z0-9]/g,
+      '_'
+    );
 
   if ($(id)) return;
 
-  const row = document.createElement('div');
-  row.className = 'friend';
-  row.id = id;
+  const row =
+    document.createElement('div');
 
-  const label = document.createElement('span');
-  label.textContent = '📱 ' + name;
+  row.className =
+    'friend';
 
-  const info = document.createElement('div');
-  info.className = 'muted small';
-  info.textContent = 'Nearby BLE device';
+  row.id =
+    id;
+
+  const label =
+    document.createElement('span');
+
+  label.textContent =
+    '📱 ' + name;
+
+  const info =
+    document.createElement('div');
+
+  info.className =
+    'muted small';
+
+  info.textContent =
+    'Nearby BLE device';
 
   label.appendChild(info);
 
-  const button = document.createElement('button');
-  button.className = 'btn';
-  button.textContent = 'Connect';
-  button.onclick = () => window.BangMesh?.connect(address);
+  const button =
+    document.createElement('button');
 
-  row.append(label, button);
+  button.className =
+    'btn';
+
+  button.textContent =
+    'Connect';
+
+  button.onclick =
+    () =>
+      window.BangMesh?.connect(
+        address
+      );
+
+  row.append(
+    label,
+    button
+  );
+
   list.appendChild(row);
 };
 
-window.bangMeshMessage = function(text, name) {
-  addMessage(text, false, (name || 'BANG') + ' • Mesh');
+window.bangMeshMessage =
+function(text, name) {
+
+  addMessage(
+    text,
+    false,
+    (name || 'BANG') +
+    ' • Mesh'
+  );
 };
 
+/* =========================================================
+   CALLS
+   ========================================================= */
+
 function callsView() {
+
   $('main').innerHTML = `
     <div class="chat-head">
+
       <div>
-        <div class="title">Voice calls</div>
+
+        <div class="title">
+          Voice calls
+        </div>
+
         <div class="muted">
           BANG voice calling foundation
         </div>
+
       </div>
 
-      <span class="pill">🎙️ Beta</span>
+      <span class="pill">
+        🎙️ Beta
+      </span>
+
     </div>
 
     <div style="padding:20px">
+
       <div class="card">
-        <b>📞 Calling</b>
+
+        <b>
+          📞 Calling
+        </b>
 
         <p class="muted">
-          Voice calling requires the Android BANG app and Wi-Fi Direct.
+          Voice calling requires the Android
+          BANG app and Wi-Fi Direct.
         </p>
 
-        <button class="btn" onclick="startVoice()">
+        <button
+          class="btn"
+          onclick="startVoice()">
           🎙️ Start voice
         </button>
 
-        <button class="btn secondary" onclick="stopVoice()">
+        <button
+          class="btn secondary"
+          onclick="stopVoice()">
           ⏹ Stop voice
         </button>
+
       </div>
+
     </div>
   `;
 }
 
 function startVoice() {
-  window.BangMesh?.startWifiCalls();
-  toast('Starting voice transport…');
+
+  window.BangMesh
+    ?.startWifiCalls();
+
+  toast(
+    'Starting voice transport…'
+  );
 }
 
 function stopVoice() {
-  window.BangMesh?.stopAudio();
-  toast('Voice transport stopped');
+
+  window.BangMesh
+    ?.stopAudio();
+
+  toast(
+    'Voice transport stopped'
+  );
 }
 
+/* =========================================================
+   FRIENDS
+   ========================================================= */
+
 async function friendsView() {
+
   $('main').innerHTML = `
     <div class="chat-head">
+
       <div>
-        <div class="title">Friends</div>
+
+        <div class="title">
+          Friends
+        </div>
+
         <div class="muted">
           Keep your circle intentional.
         </div>
+
       </div>
+
     </div>
 
     <div style="padding:20px">
+
       <div class="card">
-        <b>📡 Nearby BANG accounts</b>
+
+        <b>
+          📡 Nearby BANG accounts
+        </b>
 
         <p class="muted small">
-          Accounts connected to this BANG server appear here.
+          Accounts connected to this BANG
+          server appear here.
         </p>
 
-        <button class="btn" onclick="nearby()">
+        <button
+          class="btn"
+          onclick="nearby()">
           Find nearby accounts
         </button>
 
-        <div id="nearbyList" class="list"></div>
+        <div
+          id="nearbyList"
+          class="list">
+        </div>
+
       </div>
 
-      <div class="actions" style="margin-top:14px">
-        <input class="field"
+      <div
+        class="actions"
+        style="margin-top:14px">
+
+        <input
+          class="field"
           id="friendName"
           placeholder="Username">
 
-        <button class="btn" onclick="requestFriend()">
+        <button
+          class="btn"
+          onclick="requestFriend()">
           Send request
         </button>
+
       </div>
 
-      <div id="friends" class="list"></div>
-      <div id="incoming" class="list"></div>
+      <div
+        id="friends"
+        class="list">
+      </div>
+
+      <div
+        id="incoming"
+        class="list">
+      </div>
+
     </div>
   `;
 
   loadFriends();
 }
 
+/* =========================================================
+   NEARBY USERS
+   ========================================================= */
+
 async function nearby() {
+
   try {
-    const data = await api('/api/nearby');
-    const list = $('nearbyList');
 
-    list.innerHTML = (data.users || []).map(user => `
-      <div class="friend">
-        <span>
-          @${esc(user.username)}
-          <div class="muted small">
-            ${esc(user.displayName || '')}
+    const data =
+      await api('/api/nearby');
+
+    const list =
+      $('nearbyList');
+
+    list.innerHTML =
+      (data.users || [])
+        .map(user => `
+
+          <div class="friend">
+
+            <span>
+              @${esc(user.username)}
+
+              <div class="muted small">
+                ${esc(
+                  user.displayName || ''
+                )}
+              </div>
+            </span>
+
+            <button
+              class="btn"
+              onclick="requestByName(${JSON.stringify(
+                user.username
+              )})">
+              Add
+            </button>
+
           </div>
-        </span>
 
-        <button class="btn"
-          onclick="requestByName(${JSON.stringify(user.username)})">
-          Add
-        </button>
-      </div>
-    `).join('') ||
+        `)
+        .join('') ||
       '<div class="muted">No nearby accounts.</div>';
+
   } catch (error) {
-    toast(error.message);
+
+    toast(
+      error.message
+    );
   }
 }
 
 function requestByName(username) {
-  $('friendName').value = username;
+
+  const input =
+    $('friendName');
+
+  if (input) {
+    input.value =
+      username;
+  }
+
   requestFriend();
 }
 
-async function loadFriends() {
-  try {
-    const data = await api('/api/friends');
+/* =========================================================
+   LOAD FRIENDS
+   ========================================================= */
 
-    $('friends').innerHTML = (data.friends || []).map(friend => `
-      <div class="friend">
-        <span>@${esc(friend.username)}</span>
-        <span class="muted">
-          ${esc(friend.displayName || '')}
-        </span>
-      </div>
-    `).join('') ||
+async function loadFriends() {
+
+  try {
+
+    const data =
+      await api('/api/friends');
+
+    const friends =
+      $('friends');
+
+    const incoming =
+      $('incoming');
+
+    if (!friends || !incoming) {
+      return;
+    }
+
+    friends.innerHTML =
+      (data.friends || [])
+        .map(friend => `
+
+          <div class="friend">
+
+            <span>
+              @${esc(
+                friend.username
+              )}
+            </span>
+
+            <span class="muted">
+              ${esc(
+                friend.displayName || ''
+              )}
+            </span>
+
+          </div>
+
+        `)
+        .join('') ||
       '<div class="muted">No friends yet.</div>';
 
-    $('incoming').innerHTML = (data.incoming || []).map(request => `
-      <div class="friend">
-        <span>
-          Request from @${esc(request.from.username)}
-        </span>
+    incoming.innerHTML =
+      (data.incoming || [])
+        .map(request => `
 
-        <button class="btn"
-          onclick="acceptFriend(${JSON.stringify(request.id)})">
-          Accept
-        </button>
-      </div>
-    `).join('');
+          <div class="friend">
+
+            <span>
+              Request from
+              @${esc(
+                request.from.username
+              )}
+            </span>
+
+            <button
+              class="btn"
+              onclick="acceptFriend(${JSON.stringify(
+                request.id
+              )})">
+              Accept
+            </button>
+
+          </div>
+
+        `)
+        .join('');
+
   } catch (error) {
-    $('friends').innerHTML =
-      `<div class="danger small">${esc(error.message)}</div>`;
+
+    const friends =
+      $('friends');
+
+    if (friends) {
+
+      friends.innerHTML =
+        `<div class="danger small">
+          ${esc(error.message)}
+        </div>`;
+    }
   }
 }
 
+/* =========================================================
+   FRIEND REQUEST
+   ========================================================= */
+
 async function requestFriend() {
-  const username = $('friendName').value.trim();
+
+  const input =
+    $('friendName');
+
+  if (!input) return;
+
+  const username =
+    input.value.trim();
 
   if (!username) {
-    toast('Enter a username');
+
+    toast(
+      'Enter a username'
+    );
+
     return;
   }
 
   try {
-    await api('/api/friends/request', {
-      method: 'POST',
-      body: JSON.stringify({ username })
-    });
 
-    $('friendName').value = '';
-    toast('Request sent');
+    await api(
+      '/api/friends/request',
+      {
+        method: 'POST',
+
+        body: JSON.stringify({
+          username
+        })
+      }
+    );
+
+    input.value = '';
+
+    toast(
+      'Request sent'
+    );
+
   } catch (error) {
-    toast(error.message);
+
+    toast(
+      error.message
+    );
   }
 }
+
+/* =========================================================
+   ACCEPT FRIEND
+   ========================================================= */
 
 async function acceptFriend(id) {
-  try {
-    await api('/api/friends/accept', {
-      method: 'POST',
-      body: JSON.stringify({ id })
-    });
 
-    toast('Friend added');
+  try {
+
+    await api(
+      '/api/friends/accept',
+      {
+        method: 'POST',
+
+        body: JSON.stringify({
+          id
+        })
+      }
+    );
+
+    toast(
+      'Friend added'
+    );
+
     loadFriends();
+
   } catch (error) {
-    toast(error.message);
+
+    toast(
+      error.message
+    );
   }
 }
+
+/* =========================================================
+   INVITE
+   ========================================================= */
 
 async function invite() {
-  try {
-    const data = await api('/api/invite', {
-      method: 'POST'
-    });
 
-    const link = `${API}/join/${data.code}`;
+  try {
+
+    const data =
+      await api(
+        '/api/invite',
+        {
+          method: 'POST'
+        }
+      );
+
+    const link =
+      `${BANG_SERVER}/join/${data.code}`;
 
     try {
-      await navigator.clipboard.writeText(link);
-      toast('Invite copied');
+
+      await navigator.clipboard
+        .writeText(link);
+
+      toast(
+        'Invite copied'
+      );
+
     } catch {
-      prompt('Copy this invite link:', link);
+
+      window.prompt(
+        'Copy this invite link:',
+        link
+      );
     }
+
   } catch (error) {
-    toast(error.message);
+
+    toast(
+      error.message
+    );
   }
 }
 
+/* =========================================================
+   SETTINGS
+   ========================================================= */
+
 function settingsView() {
+
   $('main').innerHTML = `
     <div class="chat-head">
+
       <div>
-        <div class="title">Settings</div>
-        <div class="muted">
-          Device and connection settings.
+
+        <div class="title">
+          Settings
         </div>
+
+        <div class="muted">
+          Device and BANG settings.
+        </div>
+
       </div>
+
     </div>
 
     <div style="padding:20px">
+
       <div class="card">
-        <b>BANG server</b>
+
+        <b>
+          BANG server
+        </b>
 
         <p class="muted small">
-          Enter the address of your BANG backend server.
+          This BANG build is connected to
+          the configured local server.
         </p>
 
-        <input class="field"
-          id="api2"
-          value="${esc(API)}">
+        <div
+          class="field"
+          style="margin-top:10px">
+          ${esc(BANG_SERVER)}
+        </div>
 
-        <br><br>
-
-        <button class="btn" onclick="saveSettingsApi()">
-          Save
-        </button>
       </div>
 
       <div class="card">
-        <b>Privacy</b>
+
+        <b>
+          Privacy
+        </b>
 
         <p class="muted">
-          BANG does not need your real name. Use a nickname and only
-          share invites with people you trust.
+          BANG does not need your real name.
+          Use a nickname and only share
+          invites with people you trust.
         </p>
+
       </div>
+
     </div>
   `;
 }
 
-function saveSettingsApi() {
-  API = $('api2').value.trim().replace(/\/$/, '');
-
-  if (API && !/^https?:\/\//i.test(API)) {
-    API = 'http://' + API;
-  }
-
-  localStorage.setItem('bang_api', API);
-  toast('Server address saved');
-}
+/* =========================================================
+   LOGOUT
+   ========================================================= */
 
 function logout() {
+
   token = '';
   me = null;
 
-  localStorage.removeItem('bang_token');
-  localStorage.removeItem('bang_user');
+  localStorage.removeItem(
+    'bang_token'
+  );
+
+  localStorage.removeItem(
+    'bang_user'
+  );
 
   ws?.close();
+
+  ws = null;
+
+  API = BANG_SERVER;
+
   showAuth();
 }
 
+/* =========================================================
+   START BANG
+   ========================================================= */
+
 auth();
+
 </script>
 </body>
 </html>
