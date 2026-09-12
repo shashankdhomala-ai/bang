@@ -472,25 +472,25 @@ function showAuth() {
           </button>
         </div>
 
-        <div class="card">
-          <span class="toggle" onclick="toggleConnection()">
-            ⚙️ Connection settings
-          </span>
+     <div class="card">
+  <span class="toggle" onclick="toggleConnection()">
+    ⚙️ Connection settings
+  </span>
 
-          <div id="connectionSettings"
-            class="hidden"
-            style="margin-top:10px">
+  <div id="connectionSettings"
+    class="hidden"
+    style="margin-top:10px">
 
-            <p class="muted small">
-              Enter your BANG server address for testing.
-            </p>
+    <p class="muted small">
+      Enter your BANG server address for testing.
+    </p>
 
-            <input class="field"
-              id="api"
-              placeholder="http://192.168.1.10:8080"
-              value="${esc(API)}">
-          </div>
-        </div>
+    <input class="field"
+      id="api"
+      placeholder="http://192.168.1.10:8080"
+      value="${esc(API)}">
+  </div>
+</div>
 
         <div id="err" class="small danger"></div>
       </div>
