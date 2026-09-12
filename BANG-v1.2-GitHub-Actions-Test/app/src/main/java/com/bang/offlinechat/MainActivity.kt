@@ -61,7 +61,7 @@ class MainActivity : Activity() {
                     view.evaluateJavascript("localStorage.setItem('bang_api','$escaped'); location.reload();", null)
                     return
                 }
-                view.evaluateJavascript("(function(){if(document.getElementById('bang-mobile-enhancements'))return;var s=document.createElement('script');s.id='bang-mobile-enhancements';s.src='mobile-enhancements.js';s.onload=function(){console.log('BANG mobile enhancements loaded')};s.onerror=function(){console.warn('BANG mobile enhancements unavailable')};document.body.appendChild(s)})()", null)
+                view.evaluateJavascript("(function(){if(document.getElementById('bang-mobile-enhancements'))return;var s=document.createElement('script');s.id='bang-mobile-enhancements';s.src='mobile-enhancements.js';s.onload=function(){var m=document.createElement('script');m.id='bang-offline-mesh-v2';m.src='offline-mesh-v2.js';m.onload=function(){console.log('BANG offline mesh v2 loaded')};m.onerror=function(){console.warn('BANG offline mesh v2 unavailable')};document.body.appendChild(m);};s.onerror=function(){var m=document.createElement('script');m.id='bang-offline-mesh-v2';m.src='offline-mesh-v2.js';document.body.appendChild(m);};document.body.appendChild(s)})()", null)
             }
         }
         web.addJavascriptInterface(MeshBridge(), "BangMesh")
