@@ -1,19 +1,9 @@
-plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
-
-val configuredBangApiUrl = providers.environmentVariable("BANG_API_URL")
-    .orElse(providers.gradleProperty("BANG_API_URL"))
-    .orNull
-    ?.trim()
-    ?.removeSuffix("/")
-    .orEmpty()
-
-val releaseVersionName = providers.gradleProperty("versionName").orNull?.trim().orEmpty()
-val releaseVersionCode = providers.gradleProperty("versionCode").orNull?.trim()?.toIntOrNull()
-
-fun bangApiBuildConfigValue(url: String): String = "\"${url.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
 
 android {
-    buildFeatures { buildConfig = true }
     namespace = "com.bang.offlinechat"
     compileSdk = 36
 
@@ -21,9 +11,20 @@ android {
         applicationId = "com.bang.offlinechat"
         minSdk = 26
         targetSdk = 36
-        versionCode = releaseVersionCode ?: 14
-        versionName = releaseVersionName.ifBlank { "1.0.1" }
+        versionCode = 14
+        versionName = "1.0.1"
     }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    val configuredBangApiUrl = providers.gradleProperty("BANG_API_URL").orNull
+        ?: providers.environmentVariable("BANG_API_URL").orNull
+        ?: ""
+
+    fun bangApiBuildConfigValue(url: String): String =
+        "\"${url.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
     signingConfigs {
         create("release") {
@@ -33,9 +34,9 @@ android {
             val keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
             if (!keystoreFile.isNullOrBlank()) {
                 storeFile = file(keystoreFile)
-                storePassword = keystorePassword
-                this.keyAlias = keyAlias
-                this.keyPassword = keyPassword
+                if (!keystorePassword.isNullOrBlank()) storePassword = keystorePassword
+                if (!keyAlias.isNullOrBlank()) this.keyAlias = keyAlias
+                if (!keyPassword.isNullOrBlank()) this.keyPassword = keyPassword
             }
         }
     }
@@ -47,18 +48,27 @@ android {
         }
 
         release {
-            if (configuredBangApiUrl.isBlank()) {
-                throw GradleException("BANG_API_URL is required for release builds.")
+            val releaseRequested = gradle.startParameter.taskNames.any {
+                it.contains("Release", ignoreCase = true)
             }
-            require(configuredBangApiUrl.startsWith("https://")) {
-                "BANG_API_URL for release must use HTTPS."
-            }
-            val signingConfigured = !providers.environmentVariable("KEYSTORE_FILE").orNull.isNullOrBlank()
-            if (!signingConfigured) {
-                throw GradleException("Release signing is not configured. Provide KEYSTORE_FILE and signing credentials.")
+            if (releaseRequested) {
+                if (configuredBangApiUrl.isBlank()) {
+                    throw GradleException("BANG_API_URL is required for release builds.")
+                }
+                require(configuredBangApiUrl.startsWith("https://")) {
+                    "BANG_API_URL for release must use HTTPS."
+                }
+                val signingConfigured = !providers.environmentVariable("KEYSTORE_FILE").orNull.isNullOrBlank()
+                if (!signingConfigured) {
+                    throw GradleException("Release signing is not configured. Provide KEYSTORE_FILE and signing credentials.")
+                }
             }
             signingConfig = signingConfigs.getByName("release")
-            buildConfigField("String", "BANG_API_URL", bangApiBuildConfigValue(configuredBangApiUrl))
+            buildConfigField(
+                "String",
+                "BANG_API_URL",
+                bangApiBuildConfigValue(configuredBangApiUrl)
+            )
         }
     }
 
