@@ -12,6 +12,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
 
 class MainActivity : Activity() {
@@ -44,14 +45,34 @@ class MainActivity : Activity() {
             override fun onError(text: String) = sendMeshEvent("error", text)
             override fun onCallEvent(event: String, from: String, target: String) = sendCallEvent(event, from, target)
         })
+
         web = findViewById(R.id.web)
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.cacheMode = WebSettings.LOAD_DEFAULT
-        web.settings.allowFileAccess = true
-        web.settings.allowContentAccess = true
+        web.settings.allowFileAccess = false
+        web.settings.allowContentAccess = false
+        web.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         web.webChromeClient = WebChromeClient()
+
+        val assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+
         web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest) =
+                assetLoader.shouldInterceptRequest(request.url) ?: super.shouldInterceptRequest(view, request)
+
+            override fun shouldInterceptRequest(view: WebView, url: String) =
+                assetLoader.shouldInterceptRequest(android.net.Uri.parse(url)) ?: super.shouldInterceptRequest(view, url)
+
+            override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
+                super.onReceivedError(view, request, error)
+                if (request.isForMainFrame) {
+                    sendMeshEvent("error", "BANG screen failed to load: ${error.description}")
+                }
+            }
+
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
                 val api = BuildConfig.BANG_API_URL.trim().removeSuffix("/")
@@ -65,7 +86,7 @@ class MainActivity : Activity() {
             }
         }
         web.addJavascriptInterface(MeshBridge(), "BangMesh")
-        web.loadUrl("file:///android_asset/index.html")
+        web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
     }
 
     inner class MeshBridge {
