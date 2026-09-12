@@ -19,6 +19,7 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var mesh: MeshManager
     private val meshPermissionRequest = 7001
+    private val bluetoothEnableRequest = 7003
     private val audioPermissionRequest = 7002
     private var pendingAudioAction: (() -> Unit)? = null
     private lateinit var wifiCalls: WifiDirectCallManager
@@ -87,6 +88,9 @@ class MainActivity : Activity() {
         }
         web.addJavascriptInterface(MeshBridge(), "BangMesh")
         web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
+
+        // BANG Mesh is a core feature: start it automatically after permissions/Bluetooth are ready.
+        requestMeshPermissionsAndStart()
     }
 
     inner class MeshBridge {
@@ -123,13 +127,28 @@ class MainActivity : Activity() {
         if (missing.isNotEmpty()) { requestPermissions(missing.toTypedArray(), meshPermissionRequest); return }
         enableBluetoothIfNeeded()
     }
-    private fun enableBluetoothIfNeeded() { val adapter = BluetoothAdapter.getDefaultAdapter(); if (adapter != null && !adapter.isEnabled) { startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)); return }; mesh.start() }
+    private fun enableBluetoothIfNeeded() {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter != null && !adapter.isEnabled) {
+            startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), bluetoothEnableRequest)
+            return
+        }
+        mesh.start()
+    }
+    @Deprecated("Deprecated in Android SDK; kept for compatibility with this Activity implementation")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == bluetoothEnableRequest) {
+            if (BluetoothAdapter.getDefaultAdapter()?.isEnabled == true) mesh.start()
+            else sendMeshEvent("error", "Bluetooth must stay on for BANG Mesh.")
+        }
+    }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == audioPermissionRequest && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) { val action = pendingAudioAction; pendingAudioAction = null; action?.invoke() ?: wifiCalls.start() }
         else if (requestCode == audioPermissionRequest) { pendingAudioAction = null; sendMeshEvent("error", "Microphone/Nearby permission was not granted.") }
         else if (requestCode == meshPermissionRequest && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) enableBluetoothIfNeeded()
-        else if (requestCode == meshPermissionRequest) sendMeshEvent("error", "Nearby devices permission was not granted.")
+        else if (requestCode == meshPermissionRequest) sendMeshEvent("error", "Nearby devices permission was not granted. Mesh cannot run until it is allowed.")
     }
     private fun sendMeshEvent(type: String, text: String) { runOnUiThread { val js = "window.bangMeshEvent && window.bangMeshEvent(${JSONObject.quote(type)},${JSONObject.quote(text)});"; if (::web.isInitialized) web.evaluateJavascript(js, null) } }
     private fun sendMeshPeer(peer: MeshManager.Peer) { runOnUiThread { val js = "window.bangMeshPeer && window.bangMeshPeer(${JSONObject.quote(peer.name)},${JSONObject.quote(peer.address)});"; if (::web.isInitialized) web.evaluateJavascript(js, null) } }
