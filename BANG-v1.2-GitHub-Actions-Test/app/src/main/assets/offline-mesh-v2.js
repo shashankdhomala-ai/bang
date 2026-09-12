@@ -10,38 +10,15 @@
     box.className = 'card';
     box.style.margin = '0 14px 14px';
     box.innerHTML = `
-      <b>🛰️ Offline / Local</b>
+      <b>🛰️ BANG Mesh</b>
       <div class="muted small" id="bang-local-status" style="margin-top:5px">
-        Start Local mode to discover nearby BANG phones. Internet is not required.
-      </div>
-      <div class="actions" style="margin-top:10px">
-        <button class="btn" id="bang-local-start">Start Local</button>
-        <button class="btn secondary" id="bang-local-stop">Stop Local</button>
+        Mesh stays on automatically when Nearby devices permission and Bluetooth are available.
       </div>
       <div class="muted small" style="margin-top:10px">
-        A→B→C chat relay: B can forward messages between nearby peers. Hop limit is 4.
-      </div>
-      <div class="actions" style="margin-top:8px">
-        <button class="btn secondary" id="bang-relay-start">Enable Relay</button>
-        <button class="btn secondary" id="bang-relay-stop">Disable Relay</button>
+        Nearby phones can relay encrypted A→B→C messages. Relay devices forward ciphertext and do not read the message.
       </div>
     `;
     main.appendChild(box);
-
-    document.getElementById('bang-local-start').onclick = function () {
-      if (!window.BangMesh) return toast('Local mode is available in the Android app build.');
-      window.BangMesh.start();
-    };
-    document.getElementById('bang-local-stop').onclick = function () {
-      window.BangMesh?.stop();
-    };
-    document.getElementById('bang-relay-start').onclick = function () {
-      if (!window.BangMesh) return toast('Relay is available in the Android app build.');
-      window.BangMesh.startRelay();
-    };
-    document.getElementById('bang-relay-stop').onclick = function () {
-      window.BangMesh?.stopRelay();
-    };
   }
 
   const originalChatView = window.chatView;
@@ -70,14 +47,8 @@
     box.innerHTML = `
       <b>📞 Local A→B→C calling</b>
       <p class="muted small">B acts only as a transport relay. This is a prototype transport, not production VoIP.</p>
-      <div class="actions">
-        <button class="btn" id="bang-call-relay-start">Start B Relay</button>
-        <button class="btn secondary" id="bang-call-relay-stop">Stop B Relay</button>
-      </div>
     `;
     main.appendChild(box);
-    document.getElementById('bang-call-relay-start').onclick = () => window.BangMesh?.startRelay();
-    document.getElementById('bang-call-relay-stop').onclick = () => window.BangMesh?.stopRelay();
   }
 
   window.bangMeshEvent = (function (previous) {
