@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.ParcelUuid
 import android.util.Base64
-import android.util.Log
 import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.security.KeyFactory
@@ -20,16 +19,17 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
-import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * BANG Mesh v1
+ * BANG Mesh v2.
  *
- * First milestone: advertise + scan over BLE, connect over GATT, perform a
- * small ECDH handshake, then exchange AES-GCM encrypted text. This is a
- * prototype transport layer; it is not a replacement for the Signal Protocol.
+ * Nearby discovery and encrypted BLE links are kept from Mesh v1. Messages now
+ * carry a route id and bounded TTL so a connected A-B-C chain can forward chat
+ * traffic across multiple phones. Encryption is hop-by-hop: every relay can
+ * decrypt a message and re-encrypt it for the next peer. This is a transport
+ * prototype, not a Signal-Protocol end-to-end encrypted messenger.
  */
 class MeshManager(private val context: Context, private val listener: Listener) {
     interface Listener {
@@ -44,12 +44,12 @@ class MeshManager(private val context: Context, private val listener: Listener) 
     data class Peer(val address: String, val name: String)
 
     companion object {
-        private const val TAG = "BANG-Mesh"
         private val SERVICE_UUID: UUID = UUID.fromString("8b8a2a80-9f6f-4b3d-9b5e-2d5b7e0c2026")
         private val RX_UUID: UUID = UUID.fromString("8b8a2a81-9f6f-4b3d-9b5e-2d5b7e0c2026")
         private val TX_UUID: UUID = UUID.fromString("8b8a2a82-9f6f-4b3d-9b5e-2d5b7e0c2026")
         private const val FRAME_PAYLOAD = 16
         private const val MAX_MESSAGE = 2048
+        private const val DEFAULT_TTL = 4
     }
 
     private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
@@ -117,6 +117,7 @@ class MeshManager(private val context: Context, private val listener: Listener) 
         connections.clear()
         sessions.clear()
         assemblies.clear()
+        seenRoutePackets.clear()
         gattServer?.close()
         gattServer = null
         listener.onStatus("⚪ Mesh stopped")
@@ -137,18 +138,23 @@ class MeshManager(private val context: Context, private val listener: Listener) 
         val clean = text.trim()
         if (clean.isEmpty()) return
         if (clean.toByteArray(Charsets.UTF_8).size > MAX_MESSAGE) {
-            listener.onError("Mesh message is limited to 2 KB for v1.")
+            listener.onError("Mesh message is limited to 2 KB for v2.")
             return
         }
-        val ready = connections.entries.firstOrNull { sessions[it.key]?.key != null }
-        if (ready == null) {
+        val ready = connections.entries.filter { sessions[it.key]?.key != null }
+        if (ready.isEmpty()) {
             listener.onError("No encrypted mesh peer is connected yet.")
             return
         }
-        sendEncrypted(ready.key, clean)
+        val id = UUID.randomUUID().toString()
+        seenRoutePackets.add(id)
+        ready.forEach { (address, _) ->
+            sendEncrypted(address, clean, id, localAdvertisedName(), DEFAULT_TTL)
+        }
     }
 
     fun peerList(): List<Peer> = peers.values.sortedBy { it.name.lowercase() }
+
     fun callTarget(targetName: String): Boolean {
         val target = targetName.trim()
         if (target.isEmpty()) { listener.onError("Choose a BANG device to call."); return false }
@@ -158,7 +164,7 @@ class MeshManager(private val context: Context, private val listener: Listener) 
             put("id", id)
             put("from", localAdvertisedName())
             put("target", target)
-            put("ttl", 4)
+            put("ttl", DEFAULT_TTL)
         }.toString().toByteArray(Charsets.UTF_8)
         seenRoutePackets.add(id)
         var sent = false
@@ -178,7 +184,7 @@ class MeshManager(private val context: Context, private val listener: Listener) 
             put("id", UUID.randomUUID().toString())
             put("from", localAdvertisedName())
             put("target", targetName.trim())
-            put("ttl", 4)
+            put("ttl", DEFAULT_TTL)
         }.toString().toByteArray(Charsets.UTF_8)
         connections.keys.forEach { address ->
             if (sessions[address]?.key != null) connections[address]?.let { sendPacket(address, packet, it) }
@@ -220,9 +226,7 @@ class MeshManager(private val context: Context, private val listener: Listener) 
     }
 
     private val advertiseCallback = object : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
-            advertising = true
-        }
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { advertising = true }
         override fun onStartFailure(errorCode: Int) {
             advertising = false
             listener.onError("BLE advertising failed: $errorCode")
@@ -386,18 +390,35 @@ class MeshManager(private val context: Context, private val listener: Listener) 
                 val nonce = Base64.decode(json.getString("n"), Base64.NO_WRAP)
                 val cipher = Base64.decode(json.getString("c"), Base64.NO_WRAP)
                 val text = decrypt(key, nonce, cipher) ?: return
-                listener.onMessage(text, peers[address] ?: Peer(address, "BANG device"))
+                val id = json.optString("id")
+                if (id.isNotEmpty() && !seenRoutePackets.add(id)) return
+                val from = json.optString("from").ifBlank { peers[address]?.name ?: "BANG device" }
+                listener.onMessage(text, Peer(address, from))
+                val ttl = json.optInt("ttl", 0)
+                if (id.isNotEmpty() && ttl > 0) {
+                    val nextTtl = ttl - 1
+                    if (nextTtl > 0) {
+                        connections.keys.forEach { next ->
+                            if (next != address && sessions[next]?.key != null) {
+                                sendEncrypted(next, text, id, from, nextTtl)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    private fun sendEncrypted(address: String, text: String) {
+    private fun sendEncrypted(address: String, text: String, id: String = UUID.randomUUID().toString(), from: String = localAdvertisedName(), ttl: Int = 0) {
         val session = sessions[address] ?: return
         val key = session.key ?: return
         val nonce = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
         val cipher = encrypt(key, nonce, text.toByteArray(Charsets.UTF_8)) ?: return
         val packet = JSONObject().apply {
             put("t", "msg")
+            put("id", id)
+            put("from", from)
+            put("ttl", ttl)
             put("n", Base64.encodeToString(nonce, Base64.NO_WRAP))
             put("c", Base64.encodeToString(cipher, Base64.NO_WRAP))
         }.toString().toByteArray(Charsets.UTF_8)
