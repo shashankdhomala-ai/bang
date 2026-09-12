@@ -1,0 +1,8 @@
+node_modules
+backend/bang-data.json
+backend/bang-data.json.tmp
+.git
+.github
+*.log
+.env
+.env.*
