@@ -76,8 +76,22 @@ class MainActivity : Activity() {
         @JavascriptInterface fun call(targetName: String) { runOnUiThread { mesh.callTarget(targetName) } }
         @JavascriptInterface fun endCall(targetName: String) { runOnUiThread { mesh.endCall(targetName); audio.stop(); stopCallService() } }
         @JavascriptInterface fun startWifiCalls() { runOnUiThread { requestAudioPermissionsAndStartWifi() } }
-        @JavascriptInterface fun startAudioServer() { runOnUiThread { requestAudioPermissions { startCallService(); audio.startServer { sendCallEvent("audio_connected", "", "") } } } }
-        @JavascriptInterface fun connectAudio(host: String) { runOnUiThread { requestAudioPermissions { startCallService(); audio.connect(host = host, onConnected = { sendCallEvent("audio_connected", "", host) }) } } }
+        @JavascriptInterface fun startAudioServer() {
+            runOnUiThread {
+                requestAudioPermissions {
+                    startCallService()
+                    audio.startServer(onConnected = { sendCallEvent("audio_connected", "", "") })
+                }
+            }
+        }
+        @JavascriptInterface fun connectAudio(host: String) {
+            runOnUiThread {
+                requestAudioPermissions {
+                    startCallService()
+                    audio.connect(host = host, onConnected = { sendCallEvent("audio_connected", "", host) })
+                }
+            }
+        }
         @JavascriptInterface fun stopAudio() { runOnUiThread { audio.stop(); stopCallService() } }
         @JavascriptInterface fun startRelay() { runOnUiThread { relay.start { text -> sendMeshEvent("relay_status", text) } } }
         @JavascriptInterface fun stopRelay() { runOnUiThread { relay.stop(); sendMeshEvent("relay_status", "A→B→C relay stopped") } }
