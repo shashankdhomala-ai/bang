@@ -503,12 +503,7 @@ function toggleConnection() {
 }
 
 async function signup() {
-  setApi();
-
-  if (!API) {
-    $('err').textContent = 'Enter your BANG server address first.';
-    return;
-  }
+  API = 'http://192.168.1.11:8080';
 
   try {
     const data = await api('/api/signup', {
