@@ -8,6 +8,8 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    env:
+      BANG_API_URL: ${{ vars.BANG_API_URL }}
 
     steps:
       - name: Checkout
@@ -42,3 +44,16 @@ jobs:
           name: BANG-debug-apk
           path: BANG-v1.2-GitHub-Actions-Test/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Verify release configuration
+        working-directory: BANG-v1.2-GitHub-Actions-Test
+        run: |
+          if [ -z "$BANG_API_URL" ]; then
+            echo "BANG_API_URL is not configured; skipping release build." 
+            exit 0
+          fi
+          case "$BANG_API_URL" in
+            https://*) ;;
+            *) echo "BANG_API_URL must use HTTPS for release builds."; exit 1 ;;
+          esac
+          gradle --no-daemon assembleRelease
