@@ -4,171 +4,88 @@
   const $ = (id) => document.getElementById(id);
   let toastTimer;
 
-  function showMobileToast(message) {
-    let el = $('bang-mobile-toast');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'bang-mobile-toast';
-      el.className = 'bang-mobile-toast';
-      el.setAttribute('role', 'status');
-      el.setAttribute('aria-live', 'polite');
-      document.body.appendChild(el);
-    }
-    el.textContent = message;
-    el.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
-  }
-
-  const style = document.createElement('style');
-  style.textContent = `
-    button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform .15s ease, opacity .15s ease, background .15s ease; }
-    button:not(:disabled):active { transform: scale(.97); }
-    button:disabled { cursor:not-allowed; opacity:.5; }
-    button:focus-visible, input:focus-visible { outline:3px solid rgba(108,99,255,.45); outline-offset:2px; }
-    .bang-mobile-nav { display:none; }
-    .bang-mobile-toast { position:fixed; left:50%; bottom:25px; z-index:10000; max-width:calc(100% - 30px); padding:13px 17px; border-radius:13px; color:#fff; background:#202943; box-shadow:0 12px 35px rgba(0,0,0,.35); transform:translate(-50%,20px); opacity:0; pointer-events:none; transition:.25s ease; text-align:center; font-size:14px; }
-    .bang-mobile-toast.show { transform:translate(-50%,0); opacity:1; }
-    @media(max-width:760px) {
-      body { padding-bottom:88px; overflow-x:hidden; }
-      #app { min-height:100dvh; }
-      .shell { width:100%; padding:14px; }
-      .top { position:sticky; top:0; z-index:10; padding:10px 1px; background:rgba(7,11,22,.88); backdrop-filter:blur(18px); }
-      .brand { font-size:24px; }
-      .layout { grid-template-columns:1fr; gap:12px; }
-      .panel { display:none !important; }
-      .chatbox { min-height:calc(100dvh - 105px); border-radius:17px; }
-      .messages { min-height:0; padding:14px; }
-      .msg { max-width:88%; font-size:14px; }
-      .composer { padding:10px; padding-bottom:max(10px,env(safe-area-inset-bottom)); }
-      .composer input, .field { min-height:46px; font-size:16px; }
-      .btn { min-height:44px; }
-      .bang-mobile-nav { display:flex; position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); height:70px; padding:5px; gap:3px; background:rgba(13,19,36,.97); border:1px solid rgba(255,255,255,.12); border-radius:20px; backdrop-filter:blur(20px); box-shadow:0 12px 35px rgba(0,0,0,.4); z-index:9998; }
-      .bang-mobile-nav button { flex:1; min-width:0; min-height:58px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px 1px; border:0; background:transparent; color:#9ba5c4; border-radius:15px; font-size:10px; }
-      .bang-mobile-nav button.active { color:#fff; background:#ffffff12; }
-      .bang-mobile-nav span { font-size:17px; line-height:1; }
-      .bang-mobile-nav small { font-size:9px; line-height:1; }
-      .bang-mobile-nav button:active { transform:scale(.95); }
-    }
-    @media(max-width:380px) { .bang-mobile-nav small { font-size:8px; } .bang-mobile-nav span { font-size:15px; } .shell { padding:10px; } }
+  const css = `
+    :root{--wa-green:#128c7e;--wa-green-dark:#075e54;--wa-bg:#efeae2;--wa-panel:#fff;--wa-text:#111b21;--wa-muted:#667781}
+    *{box-sizing:border-box}
+    body{background:#efeae2!important;color:var(--wa-text)!important;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important}
+    .shell{width:100%!important;max-width:1180px!important;margin:0 auto!important;padding:0!important}
+    .wa-app{min-height:100dvh;display:flex;flex-direction:column;background:var(--wa-bg)}
+    .wa-header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:var(--wa-green-dark);color:#fff;box-shadow:0 1px 3px #0003;flex-shrink:0}
+    .wa-brand{font-size:23px;font-weight:750;letter-spacing:-.3px}.wa-actions{display:flex;gap:6px}.wa-icon{border:0;background:transparent;color:#fff;width:42px;height:42px;border-radius:50%;font-size:20px;display:grid;place-items:center;cursor:pointer}.wa-icon:hover{background:#ffffff18}
+    .wa-tabs{height:52px;display:grid;grid-template-columns:repeat(3,1fr);background:var(--wa-green-dark);color:#d9eeeb;box-shadow:0 1px 3px #0002}.wa-tab{border:0;background:transparent;color:inherit;font-weight:700;font-size:13px;position:relative;cursor:pointer}.wa-tab.active{color:#fff}.wa-tab.active:after{content:"";position:absolute;left:10%;right:10%;bottom:0;height:3px;border-radius:3px 3px 0 0;background:#fff}
+    .wa-content{width:min(760px,100%);margin:0 auto;flex:1;background:#fff;min-height:calc(100dvh - 116px);box-shadow:0 0 22px #0001}
+    .wa-search{padding:10px;background:#f0f2f5;border-bottom:1px solid #e5e7e9}.wa-search input{width:100%;height:42px;border:0;border-radius:22px;background:#fff;padding:0 18px;font-size:15px;outline:none;box-shadow:0 1px 2px #0001}
+    .wa-section-title{padding:14px 18px 8px;color:var(--wa-green-dark);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    .wa-list{display:flex;flex-direction:column}.wa-row{min-height:72px;display:flex;align-items:center;padding:8px 16px;gap:13px;border-bottom:1px solid #edf0f2;cursor:pointer}.wa-row:hover{background:#f5f6f6}.wa-avatar{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:#dfe7e5;color:var(--wa-green-dark);font-size:20px;font-weight:700;flex:0 0 auto}.wa-row-main{min-width:0;flex:1}.wa-row-top{display:flex;justify-content:space-between;gap:8px}.wa-name{font-weight:650;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wa-time{font-size:11px;color:var(--wa-muted);white-space:nowrap}.wa-preview{font-size:13px;color:var(--wa-muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wa-badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700}
+    .wa-empty{text-align:center;padding:70px 25px;color:var(--wa-muted)}.wa-empty-icon{font-size:48px;margin-bottom:12px}.wa-empty h2{margin:0 0 8px;color:var(--wa-text);font-size:21px}
+    .wa-profile{padding:24px 18px;background:#f0f2f5;display:flex;align-items:center;gap:16px}.wa-profile .wa-avatar{width:72px;height:72px;font-size:28px;background:#d8e8e4}.wa-profile-name{font-size:20px;font-weight:700}.wa-profile-id{color:var(--wa-muted);font-size:13px;margin-top:4px}
+    .wa-setting{padding:15px 18px;border-bottom:1px solid #edf0f2;display:flex;gap:14px;align-items:center;cursor:pointer}.wa-setting-icon{width:36px;text-align:center;font-size:21px}.wa-setting b{font-size:15px}.wa-setting small{display:block;color:var(--wa-muted);margin-top:3px}
+    .wa-chat{height:100dvh;display:flex;flex-direction:column;background:var(--wa-bg)}.wa-chat-head{height:64px;background:var(--wa-green-dark);color:#fff;display:flex;align-items:center;padding:0 8px;gap:6px;flex-shrink:0}.wa-back{width:42px;height:42px;border:0;background:transparent;color:#fff;font-size:25px;border-radius:50%;cursor:pointer}.wa-chat-avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#d8e8e4;color:var(--wa-green-dark);font-weight:700}.wa-chat-title{min-width:0;flex:1}.wa-chat-name{font-weight:700;font-size:16px}.wa-chat-status{font-size:11px;color:#d4e8e5;margin-top:2px}.wa-chat-actions{display:flex}.wa-messages{flex:1;overflow:auto;padding:18px 10px;background-color:#efeae2;background-image:radial-gradient(#d8d0c5 1px,transparent 1px);background-size:18px 18px}.wa-bubble{max-width:78%;width:max-content;padding:7px 10px 6px;border-radius:8px;background:#fff;margin:5px 0;box-shadow:0 1px 1px #0002;overflow-wrap:anywhere}.wa-bubble.me{margin-left:auto;background:#d9fdd3}.wa-bubble-meta{font-size:10px;color:#667781;margin-bottom:2px}.wa-composer{display:flex;align-items:center;gap:7px;padding:8px;background:#f0f2f5}.wa-compose-icon{border:0;background:transparent;color:#54656f;font-size:22px;width:38px;height:42px;cursor:pointer}.wa-text{flex:1;min-width:0;height:44px;border:0;border-radius:22px;padding:0 16px;font-size:15px;outline:none;background:#fff}.wa-send{width:44px;height:44px;border:0;border-radius:50%;background:#128c7e;color:#fff;font-size:18px;cursor:pointer}.wa-send:disabled{opacity:.45}.wa-legacy{display:none!important}
+    .bang-mobile-toast{position:fixed;left:50%;bottom:25px;z-index:10000;max-width:calc(100% - 30px);padding:12px 16px;border-radius:8px;color:#fff;background:#323232;box-shadow:0 8px 25px #0004;transform:translate(-50%,20px);opacity:0;pointer-events:none;transition:.2s ease}.bang-mobile-toast.show{transform:translate(-50%,0);opacity:1}
+    @media(max-width:760px){body{padding:0!important}.wa-content{width:100%;box-shadow:none}.wa-header{height:60px;padding:0 10px}.wa-brand{font-size:21px}.wa-tabs{height:50px}.wa-chat{height:100dvh}.wa-bubble{max-width:84%}.wa-messages{padding:12px 8px}.wa-composer{padding-bottom:max(8px,env(safe-area-inset-bottom))}}
   `;
-  document.head.appendChild(style);
+  const style = document.createElement('style'); style.id='bang-whatsapp-ui'; style.textContent=css; document.head.appendChild(style);
 
-  function closeSocketSafe() {
-    try {
-      if (typeof ws !== 'undefined' && ws) {
-        try { ws.close(); } catch (_) {}
-        ws = null;
-      }
-    } catch (_) {}
+  function toast(message){
+    let el=$('bang-mobile-toast');
+    if(!el){el=document.createElement('div');el.id='bang-mobile-toast';el.className='bang-mobile-toast';document.body.appendChild(el)}
+    el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);
   }
 
-  function setActiveMobile(view) {
-    document.querySelectorAll('.bang-mobile-nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  function closeSocket(){try{if(window.ws){window.ws.close();window.ws=null}}catch(_){} }
+  function initials(name){return String(name||'B')[0].toUpperCase()}
+
+  function homeView(){
+    closeSocket();
+    const name=window.me?.displayName||window.me?.username||'You';
+    const user=window.me?.username||'';
+    $('app').innerHTML=`<div class="wa-app"><header class="wa-header"><div class="wa-brand">💥 BANG</div><div class="wa-actions"><button class="wa-icon" aria-label="Search" onclick="BangWA.search()">⌕</button><button class="wa-icon" aria-label="Profile" onclick="BangWA.profile()">⋮</button></div></header><nav class="wa-tabs"><button class="wa-tab active" onclick="BangWA.tab('chats',this)">CHATS</button><button class="wa-tab" onclick="BangWA.tab('updates',this)">UPDATES</button><button class="wa-tab" onclick="BangWA.tab('calls',this)">CALLS</button></nav><main class="wa-content" id="wa-content"><div class="wa-search"><input placeholder="🔍  Search or start new chat" oninput="BangWA.filter(this.value)"></div><div class="wa-section-title">Recent chats</div><div class="wa-list" id="wa-chat-list"><div class="wa-row" onclick="BangWA.openChat()"><div class="wa-avatar">B</div><div class="wa-row-main"><div class="wa-row-top"><span class="wa-name">BANG Room</span><span class="wa-time">now</span></div><div class="wa-preview">Tap to open your private chat</div></div></div></div><div class="wa-section-title">Your account</div><div class="wa-row" onclick="BangWA.profile()"><div class="wa-avatar">${initials(name)}</div><div class="wa-row-main"><div class="wa-row-top"><span class="wa-name">${escapeHtml(name)}</span></div><div class="wa-preview">@${escapeHtml(user)} · Account & privacy</div></div></div></main></div>`;
   }
 
-  function addMobileNav() {
-    if (!$('app') || document.querySelector('.bang-mobile-nav')) return;
-    const nav = document.createElement('nav');
-    nav.className = 'bang-mobile-nav';
-    nav.setAttribute('aria-label', 'Mobile navigation');
-    const items = [['home','⌂','Home'],['chat','💬','Chats'],['friends','👥','Friends'],['nearby','📍','Nearby'],['calls','📞','Calls'],['settings','⚙️','Settings']];
-    items.forEach(([view, icon, label]) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.view = view;
-      b.innerHTML = '<span>' + icon + '</span><small>' + label + '</small>';
-      b.addEventListener('click', () => {
-        if (view === 'home') window.showHome?.();
-        else if (view === 'chat') window.chatView?.();
-        else if (view === 'friends') window.friendsView?.();
-        else if (view === 'nearby') { window.friendsView?.(); setTimeout(() => window.nearby?.(), 0); }
-        else if (view === 'calls') window.callsView?.();
-        else if (view === 'settings') window.settingsView?.();
-        setActiveMobile(view);
-      });
-      nav.appendChild(b);
-    });
-    document.body.appendChild(nav);
+  function escapeHtml(v){const d=document.createElement('div');d.textContent=String(v??'');return d.innerHTML}
+
+  function profileView(){
+    const name=window.me?.displayName||window.me?.username||'You';
+    const user=window.me?.username||'';
+    $('app').innerHTML=`<div class="wa-app"><header class="wa-header"><button class="wa-icon" onclick="BangWA.home()">←</button><div class="wa-brand">Profile</div><div></div></header><main class="wa-content"><section class="wa-profile"><div class="wa-avatar">${initials(name)}</div><div><div class="wa-profile-name">${escapeHtml(name)}</div><div class="wa-profile-id">@${escapeHtml(user)}</div></div></section><div class="wa-setting"><div class="wa-setting-icon">🔒</div><div><b>Privacy</b><small>Control your privacy and account</small></div></div><div class="wa-setting"><div class="wa-setting-icon">🔔</div><div><b>Notifications</b><small>Message and call notifications</small></div></div><div class="wa-setting" onclick="window.settingsView?.()"><div class="wa-setting-icon">⚙️</div><div><b>Settings</b><small>BANG connection and app settings</small></div></div></main></div>`;
   }
 
-  function enhanceChat() {
-    const input = $('text') || $('messageInput');
-    if (input) setTimeout(() => { try { input.focus(); } catch (_) {} }, 50);
+  function searchView(){
+    $('app').innerHTML=`<div class="wa-app"><header class="wa-header"><button class="wa-icon" onclick="BangWA.home()">←</button><div class="wa-brand">Search</div><div></div></header><main class="wa-content"><div class="wa-search"><input id="wa-global-search" autofocus placeholder="Search contacts and chats" oninput="BangWA.filter(this.value)"></div><div class="wa-empty"><div class="wa-empty-icon">🔍</div><h2>Search BANG</h2><div>Find chats and contacts as your BANG network grows.</div></div></main></div>`;
   }
 
-  if (typeof window.chatView === 'function') {
-    const originalChatView = window.chatView;
-    window.chatView = function () { closeSocketSafe(); originalChatView.apply(this, arguments); addMobileNav(); setActiveMobile('chat'); enhanceChat(); };
-  }
-  if (typeof window.callsView === 'function') {
-    const originalCallsView = window.callsView;
-    window.callsView = function () { closeSocketSafe(); originalCallsView.apply(this, arguments); addMobileNav(); setActiveMobile('calls'); };
-  }
-  if (typeof window.friendsView === 'function') {
-    const originalFriendsView = window.friendsView;
-    window.friendsView = function () { closeSocketSafe(); originalFriendsView.apply(this, arguments); addMobileNav(); setActiveMobile('friends'); };
-  }
-  if (typeof window.settingsView === 'function') {
-    const originalSettingsView = window.settingsView;
-    window.settingsView = function () { closeSocketSafe(); originalSettingsView.apply(this, arguments); addMobileNav(); setActiveMobile('settings'); };
-  }
-  if (typeof window.showHome === 'function') {
-    const originalShowHome = window.showHome;
-    window.showHome = function () { closeSocketSafe(); originalShowHome.apply(this, arguments); addMobileNav(); setActiveMobile('chat'); };
+  function openChat(){
+    if(typeof window.chatView==='function') window.chatView();
+    setTimeout(enhanceChat,0);
   }
 
-  if (typeof window.api === 'function') {
-    const originalApi = window.api;
-    window.api = async function (path, options = {}) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      try {
-        const opts = { ...options, signal: controller.signal };
-        return await originalApi(path, opts);
-      } catch (err) {
-        if (err && err.name === 'AbortError') throw new Error('The server took too long to respond.');
-        if (err instanceof TypeError) throw new Error('Cannot connect to the BANG server.');
-        throw err;
-      } finally { clearTimeout(timeout); }
-    };
+  function enhanceChat(){
+    const main=$('main');
+    if(!main)return;
+    const messages=$('messages');
+    const text=$('text');
+    const send=$('sendButton');
+    if(!messages||!text||!send)return;
+    const existing=messages.querySelectorAll('.msg');
+    let html=''; existing.forEach(m=>{const body=m.lastElementChild?.textContent||'';const own=m.classList.contains('me');const label=m.firstElementChild?.textContent||'BANG';html+=`<div class="wa-bubble ${own?'me':''}"><div class="wa-bubble-meta">${escapeHtml(label)}</div>${escapeHtml(body)}</div>`});
+    main.innerHTML=`<div class="wa-chat"><header class="wa-chat-head"><button class="wa-back" onclick="BangWA.home()">←</button><div class="wa-chat-avatar">B</div><div class="wa-chat-title"><div class="wa-chat-name">BANG Room</div><div class="wa-chat-status" id="wa-status">online · private</div></div><div class="wa-chat-actions"><button class="wa-icon" onclick="toast('Voice calling coming next')">📞</button><button class="wa-icon" onclick="toast('Chat options')">⋮</button></div></header><div class="wa-messages" id="messages">${html}</div><div class="wa-composer"><button class="wa-compose-icon" onclick="BangWA.attach()" aria-label="Attachment">📎</button><input class="wa-text" id="text" placeholder="Type a message" autocomplete="off"><button class="wa-compose-icon" onclick="BangWA.voice()" aria-label="Voice">🎤</button><button class="wa-send" id="sendButton" onclick="sendMessage()" aria-label="Send">➤</button></div></div>`;
+    const input=$('text'); input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();window.sendMessage?.()}});input.focus();
   }
 
-  const observer = new MutationObserver(() => {
-    document.querySelectorAll('button[onclick*="requestByName"], button[onclick*="acceptFriend"]').forEach((button) => {
-      if (button.dataset.bangSafeBound === '1') return;
-      const onclick = button.getAttribute('onclick') || '';
-      const requestMatch = onclick.match(/requestByName\((.*)\)/);
-      const acceptMatch = onclick.match(/acceptFriend\((.*)\)/);
-      if (requestMatch) {
-        let value = ''; try { value = JSON.parse(requestMatch[1]); } catch (_) {}
-        button.removeAttribute('onclick'); button.dataset.bangSafeBound = '1'; button.addEventListener('click', () => window.requestByName?.(value));
-      } else if (acceptMatch) {
-        let value = ''; try { value = JSON.parse(acceptMatch[1]); } catch (_) {}
-        button.removeAttribute('onclick'); button.dataset.bangSafeBound = '1'; button.addEventListener('click', () => window.acceptFriend?.(value));
-      }
-    });
-  });
-  observer.observe(document.body, { childList:true, subtree:true });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
-    const active = document.activeElement;
-    if (!active) return;
-    if (['u','p','username','password','n','displayName'].includes(active.id)) {
-      if (typeof window.login === 'function') { event.preventDefault(); window.login(); }
-    }
-  });
-
-  addMobileNav();
-  if ($('app')) new MutationObserver(addMobileNav).observe($('app'), { childList:true, subtree:true });
-
-  if (typeof window.toast === 'function') {
-    const originalToast = window.toast;
-    window.toast = function (message) { try { originalToast(message); } catch (_) {} if (window.innerWidth <= 760) showMobileToast(message); };
-  } else {
-    window.toast = showMobileToast;
+  function attach(){
+    let input=$('bang-file-picker');if(!input){input=document.createElement('input');input.type='file';input.id='bang-file-picker';input.hidden=true;document.body.appendChild(input);input.addEventListener('change',()=>{if(input.files?.[0])toast('Selected: '+input.files[0].name+' — file upload will be connected to BANG storage next.')})}input.click();
   }
+  function voice(){toast('Voice recording UI is ready; audio transport is not enabled yet.')}
+  function calls(){if(typeof window.callsView==='function')window.callsView()}
+  function tab(which,button){document.querySelectorAll('.wa-tab').forEach(x=>x.classList.remove('active'));button?.classList.add('active');if(which==='calls')calls();else if(which==='updates')toast('Updates will appear here when enabled');else homeView()}
+  function filter(q){const query=String(q||'').toLowerCase();document.querySelectorAll('.wa-row').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(query)?'flex':'none'})}
 
-  window.BangMobileEnhancements = { version:'1.0.0', closeSocket:closeSocketSafe, addMobileNav, showToast:showMobileToast };
+  const originalShowHome=window.showHome;
+  window.showHome=function(){ if(originalShowHome) originalShowHome.apply(this,arguments); setTimeout(homeView,0); };
+  const originalChat=window.chatView;
+  window.chatView=function(){ if(originalChat) originalChat.apply(this,arguments); setTimeout(enhanceChat,0); };
+
+  window.BangWA={home:homeView,profile:profileView,search:searchView,openChat,attach,voice,calls,tab,filter,enhanceChat};
+
+  if($('app')){new MutationObserver(()=>{const app=$('app');if(app&&!app.querySelector('.wa-app')&&!app.querySelector('.auth')){} }).observe($('app'),{childList:true})}
 })();
